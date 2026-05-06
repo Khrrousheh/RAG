@@ -16,9 +16,35 @@ from .schemas import ChatRequest, SearchRequest, Source
 
 
 LOGGER = logging.getLogger(__name__)
+MODEL_RUNNER_NAME = "Docker Model Runner"
 _EMBEDDING_LOAD_LOCK = Lock()
 _SERVICE_LOCK = Lock()
 _SERVICE: "RagService | None" = None
+
+
+def _model_runner_api_base_url(base_url: str) -> str:
+    normalized = base_url.rstrip("/")
+    normalized = re.sub(r"/engines(?:/[^/]+)?/v1$", "", normalized)
+    normalized = re.sub(r"/v1$", "", normalized)
+    return re.sub(r"/api$", "", normalized)
+
+
+def _model_name_candidates(model_name: str) -> set[str]:
+    candidates = {model_name}
+    last_segment = model_name.rsplit("/", 1)[-1]
+    candidates.add(last_segment)
+    if ":" in last_segment:
+        candidates.add(model_name.rsplit(":", 1)[0])
+        candidates.add(last_segment.rsplit(":", 1)[0])
+    else:
+        candidates.add(f"{model_name}:latest")
+        candidates.add(f"{last_segment}:latest")
+
+    for candidate in list(candidates):
+        if "/" in candidate and not candidate.startswith("docker.io/"):
+            candidates.add(f"docker.io/{candidate}")
+
+    return candidates
 
 
 def _display_policy_name(file_name: str | None, policy_title: str | None = None) -> str | None:
@@ -289,6 +315,10 @@ class RagService:
         self._policy_aliases: list[tuple[str, str, str]] | None = None
 
     @property
+    def model_runner_base_url(self) -> str:
+        return _model_runner_api_base_url(self.settings.ollama_base_url)
+
+    @property
     def embeddings(self) -> HuggingFaceEmbeddings:
         if self._embeddings is None:
             with _EMBEDDING_LOAD_LOCK:
@@ -315,20 +345,27 @@ class RagService:
 
         try:
             response = httpx.get(
-                f"{self.settings.ollama_base_url}/api/tags",
+                f"{self.model_runner_base_url}/api/tags",
                 timeout=3,
             )
             response.raise_for_status()
             models_payload = response.json().get("models", [])
-            model_names = {item.get("name") for item in models_payload}
-            if self.settings.ollama_model not in model_names:
+            model_names = {
+                value
+                for item in models_payload
+                for value in (item.get("name"), item.get("model"))
+                if value
+            }
+            expected_model_names = _model_name_candidates(self.settings.ollama_model)
+            if not expected_model_names.intersection(model_names):
                 ollama_status = "model_missing"
                 warnings.append(
-                    f"Ollama is reachable, but model {self.settings.ollama_model!r} is not pulled."
+                    f"{MODEL_RUNNER_NAME} is reachable, but model "
+                    f"{self.settings.ollama_model!r} is not pulled."
                 )
         except Exception as exc:
             ollama_status = "error"
-            warnings.append(f"Ollama check failed: {exc}")
+            warnings.append(f"{MODEL_RUNNER_NAME} check failed: {exc}")
 
         status = "ok" if qdrant_status == "ok" else "degraded"
         if ollama_status != "ok":
@@ -395,7 +432,7 @@ class RagService:
         prompt = self._build_prompt(request, sources)
         try:
             response = httpx.post(
-                f"{self.settings.ollama_base_url}/api/chat",
+                f"{self.model_runner_base_url}/api/chat",
                 json={
                     "model": self.settings.ollama_model,
                     "stream": False,
@@ -425,12 +462,13 @@ class RagService:
             response.raise_for_status()
             answer = response.json().get("message", {}).get("content", "").strip()
             if not answer:
-                raise RuntimeError("Ollama returned an empty answer.")
+                raise RuntimeError(f"{MODEL_RUNNER_NAME} returned an empty answer.")
             return answer, sources, warnings
         except Exception as exc:
-            LOGGER.warning("Ollama generation failed: %s", exc)
+            LOGGER.warning("%s generation failed: %s", MODEL_RUNNER_NAME, exc)
             warnings.append(
-                "Ollama could not generate an answer. Showing retrieved context instead."
+                f"{MODEL_RUNNER_NAME} could not generate an answer. "
+                "Showing retrieved context instead."
             )
             return _fallback_answer(request.message, sources), sources, warnings
 

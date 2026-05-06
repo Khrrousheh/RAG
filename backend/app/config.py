@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "company_policies_structural"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2:3b"
+    ollama_base_url: str = "http://localhost:12434"
+    ollama_model: str = "ai/gemma3-qat"
     ollama_timeout_seconds: float = 240.0
     ollama_num_ctx: int = 4096
     ollama_num_predict: int = 700
