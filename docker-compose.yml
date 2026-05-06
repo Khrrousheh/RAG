@@ -1,3 +1,5 @@
+name: "RAG setup with Ollama and Qdrant"
+
 services:
   ollama:
     image: ollama/ollama
