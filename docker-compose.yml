@@ -1,3 +1,5 @@
+name: "RAG model based Gemma3"
+
 services:
   qdrant:
     image: qdrant/qdrant:v1.17.1
