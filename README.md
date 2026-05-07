@@ -1,28 +1,50 @@
 # Policy RAG Chatbot
 
-A local company-policy RAG chatbot built with FastAPI, React/Vite, Qdrant, and
-Docker Model Runner. Policy PDFs are parsed into structured chunks, embedded
-with Sentence Transformers, stored in Qdrant, and queried from a web chat UI
-with cited source passages.
+A local company-policy RAG chatbot built with FastAPI, React/Vite, Qdrant,
+Sentence Transformers, and Docker Model Runner. Policy PDFs are parsed into
+structured chunks, embedded, stored in Qdrant, and queried from a streaming web
+chat UI with cited source passages.
 
-## What is included
+## Current Capabilities
 
-- `backend/` - FastAPI app exposing health, metadata, search, and chat endpoints.
-- `frontend/` - React + Vite chat interface.
-- `EDA/structural_policy_ingest.py` - PDF ingestion pipeline for policy documents.
-- `docker-compose.yml` - Local Qdrant, backend, frontend, and Docker Model Runner model binding.
-- `policies/` - Local source PDFs used for ingestion.
-- `qdrant_data/` - Local runtime data for Qdrant.
+- Structured PDF ingestion from `policies/` into Qdrant.
+- Metadata extraction from policy change-history tables.
+- Semantic search with optional policy, department, version, and effective-date filters.
+- Policy-name alias matching, including file names, titles, and acronyms.
+- Streaming chat over newline-delimited JSON from `/chat/stream`.
+- Non-streaming `/chat` fallback for clients that do not consume streams.
+- In-process metadata cache, policy-alias cache, and query-embedding LRU cache.
+- Prompt budgeting to cap context size and reduce avoidable model latency.
+- Local latency benchmarking and generated reports in `reports/`.
+
+## Repository Guide
+
+| Path | Purpose |
+| --- | --- |
+| `backend/` | FastAPI API, RAG orchestration, Qdrant retrieval, LLM calls, caches, and streaming. |
+| `frontend/` | React + Vite chat UI that streams assistant responses and displays citations. |
+| `EDA/structural_policy_ingest.py` | Main PDF ingestion pipeline for policy documents. |
+| `benchmarks/p0_latency_benchmark.py` | P0/P1 latency benchmark for search, cached search, metadata, streaming, and direct LLM timing. |
+| `reports/` | Latency and bottleneck reports generated from local benchmark runs. |
+| `docker-compose.yml` | Local Qdrant, backend, frontend, and Docker Model Runner binding. |
+| `ARCHITECTURE.md` | System architecture, runtime flow, data flow, and operational notes. |
+| `AI_CONTRACT.md` | Behavioral contract for the policy assistant, streaming schema, citations, and safety rules. |
+
+Local runtime data such as `policies/`, `qdrant_data/`, `.env`, virtual
+environments, and frontend dependencies are ignored by Git.
 
 ## Prerequisites
 
 - Docker Desktop with Docker Compose and Docker Model Runner.
-- Python 3.12 for running the ingestion script from the host.
-- Node.js 22 if you want to run the frontend outside Docker.
+- Python 3.12 for ingestion and local backend development.
+- Node.js 22 for local frontend development outside Docker.
 - Company policy PDFs placed in `policies/`.
 
-The default LLM is `ai/gemma3-qat`, and the default embedding model is
-`sentence-transformers/all-MiniLM-L6-v2`.
+Defaults:
+
+- LLM: `ai/gemma3-qat`
+- Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
+- Qdrant collection: `company_policies_structural`
 
 ## Quick Start
 
@@ -45,6 +67,10 @@ Start Qdrant:
 docker compose up -d qdrant
 ```
 
+By default, Compose maps Qdrant to host port `6334` to avoid collisions with
+other local Qdrant stacks. The backend container still reaches Qdrant internally
+at `http://qdrant:6333`.
+
 Install Python dependencies for ingestion:
 
 ```powershell
@@ -53,10 +79,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Ingest the policy PDFs into Qdrant:
+Ingest the policy PDFs into the Compose Qdrant instance:
 
 ```powershell
-python -m EDA.structural_policy_ingest --recreate
+python -m EDA.structural_policy_ingest --qdrant-url http://localhost:6334 --recreate
 ```
 
 Run the full app:
@@ -70,24 +96,14 @@ http://localhost:8000, with interactive docs at http://localhost:8000/docs.
 
 ## Local Development
 
-Run Qdrant in Docker and use Docker Model Runner for the LLM:
-
-```powershell
-docker desktop enable model-runner
-docker model pull ai/gemma3-qat
-docker compose up -d qdrant
-```
-
-Run the backend from the repo root:
+Run Qdrant and Docker Model Runner, then run the backend from the repo root:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+$env:QDRANT_URL = "http://localhost:6334"
+$env:OLLAMA_BASE_URL = "http://localhost:12434"
 uvicorn app.main:app --reload --app-dir backend
 ```
-
-The host-development defaults use Docker Model Runner at
-`http://localhost:12434` with model `ai/gemma3-qat`. If your local `.env`
-contains older Ollama values, update or remove those overrides.
 
 Run the frontend locally:
 
@@ -98,59 +114,125 @@ $env:VITE_PROXY_TARGET = "http://localhost:8000"
 npm run dev
 ```
 
+Build the frontend:
+
+```powershell
+cd frontend
+npm run build
+```
+
 ## API Endpoints
 
-- `GET /health` - checks Qdrant, Docker Model Runner, model availability, and collection size.
-- `GET /metadata` - returns indexed departments, versions, and policy names.
-- `POST /search` - retrieves relevant policy chunks with optional filters.
-- `POST /chat` - answers a question using retrieved policy context and citations.
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Checks Qdrant, Docker Model Runner, model availability, and collection size. |
+| `GET /metadata` | Returns cached departments, versions, and policy names. |
+| `POST /search` | Retrieves relevant policy chunks with optional filters. |
+| `POST /chat` | Returns one complete JSON answer with sources and warnings. |
+| `POST /chat/stream` | Streams NDJSON events: `sources`, `token`, `warning`, `metrics`, `done`, or `error`. |
+
+Example streaming request:
+
+```powershell
+$body = @{
+  message = "Can I share progress about this project on LinkedIn?"
+  top_k = 6
+} | ConvertTo-Json
+
+Invoke-WebRequest `
+  -Uri http://localhost:8000/chat/stream `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body $body
+```
 
 ## Configuration
 
-The backend reads environment variables directly or from `.env`.
+The backend reads environment variables directly or from `.env`. Docker Compose
+sets container-specific values in `docker-compose.yml`.
 
-| Variable | Default |
-| --- | --- |
-| `API_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` |
-| `QDRANT_URL` | `http://localhost:6333` |
-| `QDRANT_COLLECTION` | `company_policies_structural` |
-| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` |
-| `OLLAMA_BASE_URL` | `http://localhost:12434` |
-| `OLLAMA_MODEL` | `ai/gemma3-qat` |
-| `OLLAMA_TIMEOUT_SECONDS` | `240` |
-| `OLLAMA_NUM_CTX` | `4096` |
-| `OLLAMA_NUM_PREDICT` | `700` |
-| `DEFAULT_TOP_K` | `5` |
-| `MAX_TOP_K` | `10` |
+| Variable | Code default | Compose value | Notes |
+| --- | --- | --- | --- |
+| `API_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | same | Comma-separated allowed browser origins. |
+| `QDRANT_URL` | `http://localhost:6333` | `http://qdrant:6333` | Use `http://localhost:6334` for host scripts against Compose Qdrant. |
+| `QDRANT_HOST_PORT` | Compose-only `6334` | optional | Host port mapped to container Qdrant `6333`. |
+| `QDRANT_COLLECTION` | `company_policies_structural` | same | Vector collection name. |
+| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | same | Sentence Transformers model. |
+| `OLLAMA_BASE_URL` | `http://localhost:12434` | set by Compose model binding | Docker Model Runner/Ollama-compatible API base. |
+| `OLLAMA_MODEL` | `ai/gemma3-qat` | set by Compose model binding | LLM model name. |
+| `OLLAMA_TIMEOUT_SECONDS` | `240` | default | LLM request timeout. |
+| `OLLAMA_NUM_CTX` | `4096` | default | Model context window. |
+| `OLLAMA_NUM_PREDICT` | `384` | `384` | Output-token budget. |
+| `OLLAMA_KEEP_ALIVE` | `30m` | `30m` | Keeps model loaded between requests when supported. |
+| `DEFAULT_TOP_K` | `5` | default | Backend default retrieval count. |
+| `MAX_TOP_K` | `10` | default | Hard cap for `top_k`. |
+| `WARM_EMBEDDINGS_ON_STARTUP` | `true` | `false` | Pre-loads embedding model. Disabled in Compose for faster container startup. |
+| `WARM_LLM_ON_STARTUP` | `true` | `false` | Sends a tiny LLM warmup request. Disabled in Compose for faster startup. |
+| `WARM_METADATA_ON_STARTUP` | `true` | `true` | Preloads metadata and policy aliases. |
+| `EMBEDDING_CACHE_SIZE` | `256` | `256` | In-process query embedding LRU cache size. |
+| `PROMPT_CONTEXT_MAX_CHARS` | `3600` | `3600` | Max policy context chars included in prompt. |
+| `PROMPT_MIN_SOURCES` | `3` | `3` | Minimum prompt source count when available. |
+| `PROMPT_MAX_SOURCES` | `5` | `5` | Maximum prompt source count. |
+| `HTTP_MAX_CONNECTIONS` | `20` | `20` | Async HTTP client pool limit. |
+| `HTTP_MAX_KEEPALIVE_CONNECTIONS` | `10` | `10` | Async keep-alive pool limit. |
+| `VITE_PROXY_TARGET` | `http://backend:8000` | same | Vite `/api` proxy target. |
+| `VITE_API_URL` | `/api` | optional | Browser API base override. |
 
-For Docker, these values are set in `docker-compose.yml`.
-
-## Re-ingesting Policies
+## Re-Ingesting Policies
 
 Add or replace PDFs in `policies/`, make sure Qdrant is running, then run:
 
 ```powershell
-python -m EDA.structural_policy_ingest --recreate
+python -m EDA.structural_policy_ingest --qdrant-url http://localhost:6334 --recreate
 ```
 
-The ingestion script extracts metadata from the second page tables, chunks body
-content from page 3 onward, creates payload indexes, and upserts vectors into the
-configured Qdrant collection.
+The ingestion script:
+
+- reads PDFs from `policies/`;
+- extracts metadata from page 2 tables;
+- chunks body text from page 3 onward;
+- embeds chunks with Sentence Transformers;
+- creates Qdrant payload indexes for common filters;
+- upserts vectors and payloads into the configured collection.
+
+Restart the backend after re-ingestion so in-process metadata and policy-alias
+caches reflect the updated collection.
+
+## Benchmarking
+
+Run the latency benchmark against a running API:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python benchmarks\p0_latency_benchmark.py `
+  --api-base http://localhost:8000 `
+  --llm-base http://localhost:12434 `
+  --model ai/gemma3-qat `
+  --samples 2 `
+  --timeout 240
+```
+
+The benchmark measures metadata, search, cached search, chat without LLM,
+streamed chat, and direct LLM streaming. Recent reports are stored in `reports/`.
 
 ## Data and Privacy
 
-Local policy PDFs, `.env`, Qdrant storage, virtual environments, frontend
-dependencies, and build output are ignored by Git. Treat `policies/` and
-`qdrant_data/` as local runtime data unless you intentionally prepare sanitized
-samples for sharing. Docker Model Runner stores pulled models in Docker-managed
-local storage.
+Treat policy PDFs and Qdrant data as private local runtime data. They are ignored
+by Git by default. Do not commit real policies, Qdrant storage, `.env`, model
+files, generated caches, or benchmark outputs that reveal sensitive policy text
+unless they have been sanitized for sharing.
 
 ## Troubleshooting
 
 - If `/health` reports `model_missing`, run `docker model pull ai/gemma3-qat`.
 - If `/health` reports Docker Model Runner errors, run `docker model status`
   and enable it with `docker desktop enable model-runner`.
-- If `/health` reports Qdrant errors, start Qdrant with `docker compose up -d qdrant`.
+- If the host ingestion script cannot reach Qdrant, confirm the host port with
+  `docker compose ps`; the default is `http://localhost:6334`.
+- If the backend cannot reach Qdrant in Docker, confirm the `qdrant` service is
+  healthy and `QDRANT_URL` is `http://qdrant:6333`.
 - If the UI shows `Offline`, confirm the backend is running on port `8000`.
 - If answers have no sources, re-run ingestion and check that PDFs have
-  extractable text and metadata tables.
+  extractable body text and page 2 metadata tables.
+- If streaming appears delayed, compare `/chat/stream` locally and through
+  Docker. The P1 report notes a possible buffering issue in the Dockerized path.
