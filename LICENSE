@@ -1,0 +1,37 @@
+# MIT License with Copyright Retention and Limited Liability
+
+Copyright (c) [2026] [Mahdi Khrrousheh]
+
+Permission is hereby granted, free of charge, to any person or entity obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+1. **Copyright Retention**  
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software, including any modified or forked
+   versions. No modification or redistribution may remove or alter the original
+   copyright holder's name.
+
+2. **No Liability for Derivative Works**  
+   The original author ([Mahdi Khrrousheh]) is not responsible for any use, misuse,
+   or consequences of the Software once modified, refactored, or redistributed
+   by any third party, including but not limited to any company or organization
+   that forks this repository. Any liability arising from modified versions rests
+   solely with the entity that created or deployed that modified version.
+
+3. **No Warranty**  
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   THE SOFTWARE.
+
+---
+
+**For the company you are contracted with:**  
+You are allowed to take advantage of this source code, refactor it, and maintain it in forked repositories, provided that the original copyright notice with [Mahdi Mohammad Khrorusheh] remains intact in all copies or substantial portions. The original author assumes no responsibility for how the code is used outside the original repository.

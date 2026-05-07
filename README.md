@@ -1,9 +1,23 @@
 # Policy RAG Chatbot
 
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
+[![Qdrant](https://img.shields.io/badge/vector%20store-Qdrant-DC244C.svg)](https://qdrant.tech/)
+[![License](https://img.shields.io/badge/license-MIT%20with%20retention-green.svg)](LICENSE)
+[![Code of Conduct](https://img.shields.io/badge/code%20of%20conduct-active-4B5563.svg)](CODE_OF_CONDUCT.MD)
+
 A local company-policy RAG chatbot built with FastAPI, React/Vite, Qdrant,
 Sentence Transformers, and Docker Model Runner. Policy PDFs are parsed into
 structured chunks, embedded, stored in Qdrant, and queried from a streaming web
 chat UI with cited source passages.
+
+Reference docs:
+[Architecture](docs/ARCHITECTURE.md) |
+[AI Contract](docs/AI_CONTRACT.md) |
+[License](LICENSE) |
+[Code of Conduct](CODE_OF_CONDUCT.MD)
 
 ## Current Capabilities
 
@@ -15,7 +29,7 @@ chat UI with cited source passages.
 - Non-streaming `/chat` fallback for clients that do not consume streams.
 - In-process metadata cache, policy-alias cache, and query-embedding LRU cache.
 - Prompt budgeting to cap context size and reduce avoidable model latency.
-- Local latency benchmarking and generated reports in `reports/`.
+- Local latency benchmarking and generated reports in `docs/reports/`.
 
 ## Repository Guide
 
@@ -25,10 +39,12 @@ chat UI with cited source passages.
 | `frontend/` | React + Vite chat UI that streams assistant responses and displays citations. |
 | `EDA/structural_policy_ingest.py` | Main PDF ingestion pipeline for policy documents. |
 | `benchmarks/p0_latency_benchmark.py` | P0/P1 latency benchmark for search, cached search, metadata, streaming, and direct LLM timing. |
-| `reports/` | Latency and bottleneck reports generated from local benchmark runs. |
+| `docs/reports/` | Latency and bottleneck reports generated from local benchmark runs. |
 | `docker-compose.yml` | Local Qdrant, backend, frontend, and Docker Model Runner binding. |
-| `ARCHITECTURE.md` | System architecture, runtime flow, data flow, and operational notes. |
-| `AI_CONTRACT.md` | Behavioral contract for the policy assistant, streaming schema, citations, and safety rules. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture, runtime flow, data flow, and operational notes. |
+| [`docs/AI_CONTRACT.md`](docs/AI_CONTRACT.md) | Behavioral contract for the policy assistant, streaming schema, citations, and safety rules. |
+| [`LICENSE`](LICENSE) | MIT-style license with copyright retention and limited liability terms. |
+| [`CODE_OF_CONDUCT.MD`](CODE_OF_CONDUCT.MD) | Code of conduct and fork usage policy. |
 
 Local runtime data such as `policies/`, `qdrant_data/`, `.env`, virtual
 environments, and frontend dependencies are ignored by Git.
@@ -213,7 +229,21 @@ python benchmarks\p0_latency_benchmark.py `
 ```
 
 The benchmark measures metadata, search, cached search, chat without LLM,
-streamed chat, and direct LLM streaming. Recent reports are stored in `reports/`.
+streamed chat, and direct LLM streaming. Recent reports are stored in
+`docs/reports/`.
+
+## Governance
+
+This repository includes:
+
+- [`LICENSE`](LICENSE) - MIT-style license with copyright retention and limited
+  liability terms.
+- [`CODE_OF_CONDUCT.MD`](CODE_OF_CONDUCT.MD) - contributor expectations, fork
+  usage rules, and reporting contact.
+- [`docs/AI_CONTRACT.md`](docs/AI_CONTRACT.md) - the assistant behavior,
+  grounding, citation, fallback, and streaming contract.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - the system design and data
+  flow reference.
 
 ## Data and Privacy
 
