@@ -114,6 +114,11 @@ docker compose up --build
 Open the chat UI at http://localhost:5173. The API is available at
 http://localhost:8000, with interactive docs at http://localhost:8000/docs.
 
+For local Docker Compose development, the backend seeds a default login:
+`mahdi` / `123456`. Override or disable this with `DEFAULT_USER_LOGIN`,
+`DEFAULT_USER_PASSWORD`, and `SEED_DEFAULT_USER=false` before using a shared
+environment.
+
 ## Local Development
 
 Run Qdrant and Docker Model Runner, then run the backend from the repo root:

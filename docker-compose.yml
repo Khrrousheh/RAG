@@ -24,6 +24,10 @@ x-backend-env: &backend-env
   MEMORY_SUMMARY_TURN_THRESHOLD: "8"
   MEMORY_SUMMARY_CHAR_THRESHOLD: "12000"
   MEMORY_JOB_QUEUE: memory_jobs
+  SEED_DEFAULT_USER: "true"
+  DEFAULT_USER_LOGIN: mahdi
+  DEFAULT_USER_PASSWORD: "123456"
+  DEFAULT_USER_DISPLAY_NAME: Mahdi
   HF_HUB_DISABLE_XET: "1"
   WARM_EMBEDDINGS_ON_STARTUP: "false"
   WARM_LLM_ON_STARTUP: "false"
@@ -77,7 +81,7 @@ services:
     volumes:
       - ./qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "grep -q ':18BD .* 0A ' /proc/net/tcp /proc/net/tcp6"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -159,7 +163,7 @@ services:
       backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5173 >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173 >/dev/null || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 10

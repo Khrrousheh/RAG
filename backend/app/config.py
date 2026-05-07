@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     memory_job_queue: str = "memory_jobs"
     memory_worker_poll_timeout_seconds: int = 5
     memory_worker_max_attempts: int = 3
+    seed_default_user: bool = True
+    default_user_login: str = "mahdi"
+    default_user_password: str = "123456"
+    default_user_display_name: str = "Mahdi"
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -11,6 +11,7 @@ from .config import get_settings
 from .db import check_db, dispose_db
 from .rag import RagService, get_rag_service
 from .redis_client import check_redis, close_redis
+from .seed import seed_default_user
 from .schemas import (
     HealthResponse,
     MetadataResponse,
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         service = get_rag_service()
+        await seed_default_user(settings)
         await service.startup()
         if settings.warm_embeddings_on_startup:
             await anyio.to_thread.run_sync(service.warm_embeddings)

@@ -549,11 +549,11 @@ function App() {
               />
             )}
             <input
-              aria-label="Email"
-              autoComplete="email"
+              aria-label="Username or email"
+              autoComplete="username"
               value={authEmail}
               onChange={(event) => setAuthEmail(event.target.value)}
-              placeholder="Email"
+              placeholder="Username or email"
             />
             <input
               aria-label="Password"
