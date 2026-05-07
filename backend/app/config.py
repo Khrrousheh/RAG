@@ -9,13 +9,23 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "company_policies_structural"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2:3b"
+    ollama_base_url: str = "http://localhost:12434"
+    ollama_model: str = "ai/gemma3-qat"
     ollama_timeout_seconds: float = 240.0
     ollama_num_ctx: int = 4096
-    ollama_num_predict: int = 700
+    ollama_num_predict: int = 384
+    ollama_keep_alive: str = "30m"
     default_top_k: int = 5
     max_top_k: int = 10
+    warm_embeddings_on_startup: bool = True
+    warm_llm_on_startup: bool = True
+    warm_metadata_on_startup: bool = True
+    embedding_cache_size: int = 256
+    prompt_context_max_chars: int = 3600
+    prompt_min_sources: int = 3
+    prompt_max_sources: int = 5
+    http_max_connections: int = 20
+    http_max_keepalive_connections: int = 10
 
     model_config = SettingsConfigDict(
         env_file=".env",

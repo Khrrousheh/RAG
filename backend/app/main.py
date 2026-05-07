@@ -1,7 +1,10 @@
 import logging
+from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .config import Settings, get_settings
 from .rag import RagService, get_rag_service
@@ -22,7 +25,23 @@ logging.basicConfig(
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title=settings.app_name)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        service = get_rag_service()
+        await service.startup()
+        if settings.warm_embeddings_on_startup:
+            await anyio.to_thread.run_sync(service.warm_embeddings)
+        if settings.warm_metadata_on_startup:
+            await anyio.to_thread.run_sync(service.warm_metadata)
+        if settings.warm_llm_on_startup:
+            await service.warm_llm_async()
+        try:
+            yield
+        finally:
+            await service.shutdown()
+
+    app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -33,29 +52,42 @@ def create_app() -> FastAPI:
     )
 
     @app.get("/health", response_model=HealthResponse)
-    def health(service: RagService = Depends(get_rag_service)) -> HealthResponse:
-        return HealthResponse(**service.health())
+    async def health(service: RagService = Depends(get_rag_service)) -> HealthResponse:
+        return HealthResponse(**await service.health_async())
 
     @app.get("/metadata", response_model=MetadataResponse)
-    def metadata(service: RagService = Depends(get_rag_service)) -> MetadataResponse:
-        return MetadataResponse(**service.metadata())
+    async def metadata(service: RagService = Depends(get_rag_service)) -> MetadataResponse:
+        return MetadataResponse(**await service.metadata_async())
 
     @app.post("/search")
-    def search(
+    async def search(
         request: SearchRequest,
         service: RagService = Depends(get_rag_service),
     ) -> dict[str, object]:
-        return {"sources": service.search(request)}
+        return {"sources": await service.search_async(request)}
 
     @app.post("/chat", response_model=ChatResponse)
-    def chat(
+    async def chat(
         request: ChatRequest,
         service: RagService = Depends(get_rag_service),
         settings: Settings = Depends(get_settings),
     ) -> ChatResponse:
         request.top_k = min(request.top_k, settings.max_top_k)
-        answer, sources, warnings = service.chat(request)
+        answer, sources, warnings = await service.chat_async(request)
         return ChatResponse(answer=answer, sources=sources, warnings=warnings)
+
+    @app.post("/chat/stream")
+    async def chat_stream(
+        request: ChatRequest,
+        service: RagService = Depends(get_rag_service),
+        settings: Settings = Depends(get_settings),
+    ) -> StreamingResponse:
+        request.top_k = min(request.top_k, settings.max_top_k)
+        return StreamingResponse(
+            service.stream_chat(request),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return app
 
