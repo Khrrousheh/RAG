@@ -6,8 +6,8 @@ or operational configuration.
 
 ## System Overview
 
-The application is a local policy assistant with three runtime services and one
-host-side ingestion pipeline.
+The application is a local policy assistant with production memory services and
+one host-side ingestion pipeline.
 
 ```text
 Browser
@@ -16,11 +16,23 @@ Browser
   v
 React + Vite frontend :5173
   |
-  | /health, /metadata, /search, /chat, /chat/stream
+  | /auth/*, /chat/*, /health, /metadata, /search
   v
 FastAPI backend :8000
   |
-  | vector search and payload scroll
+  | structured user/session/turn metadata
+  v
+PostgreSQL
+
+FastAPI backend
+  |
+  | short-term memory and summary jobs
+  v
+Redis
+
+FastAPI backend
+  |
+  | policy vector search plus user memory search
   v
 Qdrant :6333 in container, :6334 on host by default
 
@@ -48,14 +60,14 @@ policies/*.pdf
 Location: `frontend/`
 
 The frontend is a React 19 + Vite app. It uses Vite's dev-server proxy to send
-browser calls from `/api/*` to the backend. The chat UI prefers
-`POST /chat/stream`, consumes newline-delimited JSON events, and updates one
-assistant message as sources and tokens arrive. If streaming fails before any
-token is received, it falls back to non-streaming `POST /chat`.
+browser calls from `/api/*` to the backend. The chat UI supports login/register,
+refresh-token restore, session switching, persisted message history, and
+streamed assistant responses. If streaming fails before any token is received,
+it falls back to non-streaming `POST /chat/message`.
 
 Main files:
 
-- `frontend/src/App.tsx` - chat state, stream parser, fallback request, sources display.
+- `frontend/src/App.tsx` - auth state, sessions, chat state, stream parser, fallback request, sources display.
 - `frontend/src/styles.css` - layout and chat styling.
 - `frontend/vite.config.ts` - `/api` proxy to `VITE_PROXY_TARGET`.
 
@@ -69,18 +81,32 @@ policy aliases, and the LLM.
 
 Main files:
 
-- `main.py` - FastAPI app, lifecycle, CORS, API routes.
+- `main.py` - FastAPI app, lifecycle, CORS, public API routes.
 - `config.py` - environment-driven settings.
 - `schemas.py` - request and response models.
 - `rag.py` - retrieval, caching, prompt building, fallback answers, model calls, streaming.
+- `api_auth.py` - register, login, refresh, logout, and current-user routes.
+- `api_chat.py` - protected session and memory-aware chat routes.
+- `chat_service.py` - authenticated chat orchestration around the existing RAG service.
+- `memory_service.py` - Redis short-term memory, Qdrant long-term memory, and job enqueueing.
+- `worker.py` - Redis-backed background memory summarization worker.
 
 The backend exposes:
 
 - `GET /health`
 - `GET /metadata`
 - `POST /search`
-- `POST /chat`
-- `POST /chat/stream`
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/refresh`
+- `POST /auth/logout`
+- `GET /auth/me`
+- `GET /chat/sessions`
+- `POST /chat/session`
+- `GET /chat/session/{id}/messages`
+- protected `POST /chat`
+- protected `POST /chat/message`
+- protected `POST /chat/stream`
 
 ### Qdrant
 
@@ -90,7 +116,20 @@ container port `6333` to host port `6334` by default:
 - backend container URL: `http://qdrant:6333`
 - host ingestion URL: `http://localhost:6334`
 
-The collection name is `company_policies_structural`.
+The policy document collection name is `company_policies_structural`.
+
+Long-term user memory uses a separate `user_memories` collection with payload
+indexes for `user_id`, future `tenant_id`, `session_id`, `kind`, `topics`, and
+`created_at`. Memory search always filters by `user_id` before ranking.
+
+### PostgreSQL And Redis
+
+PostgreSQL stores users, refresh tokens, chat sessions, conversation turns,
+long-term memory metadata, and memory job state. Alembic migrations run through
+the Compose `migrate` service before the API and worker start.
+
+Redis stores short-term memory in `stm:{user_id}:{session_id}:turns` and the
+`memory_jobs` queue consumed by the `memory-worker` service.
 
 ### Docker Model Runner
 
@@ -158,11 +197,12 @@ backend returns a deterministic fallback answer based on retrieved sources.
 
 Expected event order:
 
-1. `sources` - retrieved sources and warnings.
-2. zero or more `warning` events.
-3. one or more `token` events.
-4. `metrics`.
-5. `done`.
+1. `session` - selected or created persisted session.
+2. `sources` - retrieved sources and warnings.
+3. zero or more `warning` events.
+4. one or more `token` events.
+5. `metrics`.
+6. `done`.
 
 If preparation or generation fails, an `error` or fallback `warning` event is
 emitted. See `AI_CONTRACT.md` for the event schema.

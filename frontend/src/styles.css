@@ -33,26 +33,225 @@ button:disabled {
 }
 
 h1,
-p {
+h2,
+p,
+span,
+strong,
+small {
   overflow-wrap: anywhere;
 }
 
 .app-shell {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 247, 244, 0.95)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 247, 244, 0.95)),
     #f5f7f4;
+}
+
+.center-shell,
+.auth-shell {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.spin-icon,
+.auth-form button svg,
+.bubble.loading svg,
+.composer button.is-loading svg {
+  animation: spin 1s linear infinite;
+}
+
+.auth-panel {
+  display: grid;
+  gap: 22px;
+  width: min(100%, 420px);
+  padding: 28px;
+  background: #ffffff;
+  border: 1px solid #d9e1dd;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(28, 43, 36, 0.12);
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form input,
+.composer input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 13px;
+  color: #1f2933;
+  background: #ffffff;
+  border: 1px solid #c8d2cd;
+  border-radius: 8px;
+  outline: none;
+}
+
+.auth-form input:focus,
+.composer input:focus {
+  border-color: #2f8c7b;
+  box-shadow: 0 0 0 3px rgba(47, 140, 123, 0.16);
+}
+
+.auth-error {
+  margin: 0;
+  padding: 10px 12px;
+  color: #6b342b;
+  background: #fff0e9;
+  border: 1px solid #ffd1c2;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.primary-action,
+.text-action {
+  min-height: 44px;
+  border-radius: 8px;
+  font-weight: 750;
+}
+
+.primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ffffff;
+  background: #25665a;
+  border: 0;
+}
+
+.text-action {
+  color: #2f514b;
+  background: transparent;
+  border: 1px solid #c8d2cd;
+}
+
+.workspace-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.session-rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  background: #172026;
+  color: #ffffff;
+  border-right: 1px solid #2d3c44;
+}
+
+.rail-top,
+.rail-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px;
+}
+
+.rail-top {
+  border-bottom: 1px solid #2d3c44;
+}
+
+.rail-account {
+  border-top: 1px solid #2d3c44;
+}
+
+.rail-account div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rail-account strong {
+  font-size: 0.92rem;
+}
+
+.rail-account small {
+  color: #a8b7b1;
+  font-size: 0.78rem;
+}
+
+.session-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-row > button:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  color: #dce7e2;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.session-row > button:first-child span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row.active > button:first-child {
+  color: #ffffff;
+  background: #26363d;
+  border-color: #3e545e;
+}
+
+.icon-button,
+.mini-button {
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: #26363d;
+  border: 1px solid #3e545e;
+  border-radius: 8px;
+}
+
+.icon-button {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+}
+
+.mini-button {
+  width: 32px;
+  height: 32px;
+  color: #dce7e2;
+}
+
+.mini-button.danger {
+  color: #ffd1c2;
 }
 
 .chat-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(100%, 1040px);
+  min-width: 0;
   min-height: 100vh;
-  margin: 0 auto;
   background: rgba(255, 255, 255, 0.72);
-  border-left: 1px solid #d9e1dd;
-  border-right: 1px solid #d9e1dd;
 }
 
 .top-bar {
@@ -60,9 +259,10 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 28px 18px;
+  min-width: 0;
+  padding: 20px 28px 16px;
   border-bottom: 1px solid #d9e1dd;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
 }
 
@@ -75,11 +275,24 @@ p {
   text-transform: uppercase;
 }
 
-h1 {
+.session-rail .eyebrow {
+  color: #a8b7b1;
+}
+
+h1,
+h2 {
   margin: 0;
-  color: #172026;
-  font-size: clamp(1.45rem, 2vw, 2rem);
   line-height: 1.15;
+}
+
+h1 {
+  color: inherit;
+  font-size: 1.55rem;
+}
+
+h2 {
+  color: #172026;
+  font-size: 1.35rem;
 }
 
 .status-pill {
@@ -172,11 +385,6 @@ h1 {
   color: #44534d;
 }
 
-.bubble.loading svg,
-.composer button.is-loading svg {
-  animation: spin 1s linear infinite;
-}
-
 .warnings {
   padding: 10px 12px;
   color: #6b342b;
@@ -222,11 +430,6 @@ h1 {
   font-weight: 800;
 }
 
-.source-card summary strong,
-.source-card summary small {
-  overflow-wrap: anywhere;
-}
-
 .source-card summary small {
   color: #6a756f;
   font-weight: 700;
@@ -255,7 +458,6 @@ h1 {
   margin: 0;
   color: #25313a;
   font-size: 0.86rem;
-  overflow-wrap: anywhere;
 }
 
 .source-card p {
@@ -278,22 +480,6 @@ h1 {
   background: rgba(255, 255, 255, 0.94);
 }
 
-.composer input {
-  width: 100%;
-  min-height: 46px;
-  padding: 0 13px;
-  color: #1f2933;
-  background: #ffffff;
-  border: 1px solid #c8d2cd;
-  border-radius: 8px;
-  outline: none;
-}
-
-.composer input:focus {
-  border-color: #2f8c7b;
-  box-shadow: 0 0 0 3px rgba(47, 140, 123, 0.16);
-}
-
 .composer button {
   display: grid;
   width: 46px;
@@ -311,11 +497,33 @@ h1 {
   }
 }
 
-@media (max-width: 700px) {
-  .chat-panel {
-    border: 0;
+@media (max-width: 860px) {
+  .workspace-shell {
+    grid-template-columns: 1fr;
   }
 
+  .session-rail {
+    grid-template-rows: auto auto auto;
+  }
+
+  .session-list {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
+
+  .session-row {
+    grid-template-columns: 180px 32px 32px;
+    flex: 0 0 auto;
+  }
+
+  .chat-panel {
+    min-height: calc(100vh - 210px);
+  }
+}
+
+@media (max-width: 700px) {
   .top-bar,
   .composer,
   .messages {

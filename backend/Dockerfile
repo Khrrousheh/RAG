@@ -17,6 +17,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 ENV HF_HUB_DISABLE_XET=1
 
 COPY backend/app /app/app
+COPY backend/alembic.ini /app/alembic.ini
+COPY backend/alembic /app/alembic
 
 EXPOSE 8000
 

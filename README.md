@@ -29,6 +29,10 @@ Reference docs:
 - Non-streaming `/chat` fallback for clients that do not consume streams.
 - In-process metadata cache, policy-alias cache, and query-embedding LRU cache.
 - Prompt budgeting to cap context size and reduce avoidable model latency.
+- JWT authentication with refresh-token rotation.
+- Persistent multi-session chat history in PostgreSQL.
+- Redis-backed short-term memory and background summarization queue.
+- Long-term semantic user memory in a separate Qdrant `user_memories` collection.
 - Local latency benchmarking and generated reports in `docs/reports/`.
 
 ## Repository Guide
@@ -36,7 +40,7 @@ Reference docs:
 | Path | Purpose |
 | --- | --- |
 | `backend/` | FastAPI API, RAG orchestration, Qdrant retrieval, LLM calls, caches, and streaming. |
-| `frontend/` | React + Vite chat UI that streams assistant responses and displays citations. |
+| `frontend/` | React + Vite authenticated chat UI with sessions, streaming responses, and citations. |
 | `EDA/structural_policy_ingest.py` | Main PDF ingestion pipeline for policy documents. |
 | `benchmarks/p0_latency_benchmark.py` | P0/P1 latency benchmark for search, cached search, metadata, streaming, and direct LLM timing. |
 | `docs/reports/` | Latency and bottleneck reports generated from local benchmark runs. |
@@ -77,10 +81,10 @@ Optionally pre-pull the default model:
 docker model pull ai/gemma3-qat
 ```
 
-Start Qdrant:
+Start the data services:
 
 ```powershell
-docker compose up -d qdrant
+docker compose up -d postgres redis qdrant
 ```
 
 By default, Compose maps Qdrant to host port `6334` to avoid collisions with
@@ -101,7 +105,7 @@ Ingest the policy PDFs into the Compose Qdrant instance:
 python -m EDA.structural_policy_ingest --qdrant-url http://localhost:6334 --recreate
 ```
 
-Run the full app:
+Run the full app, migrations, and memory worker:
 
 ```powershell
 docker compose up --build
@@ -110,12 +114,18 @@ docker compose up --build
 Open the chat UI at http://localhost:5173. The API is available at
 http://localhost:8000, with interactive docs at http://localhost:8000/docs.
 
+For local Docker Compose development, the backend seeds a default login:
+`mahdi` / `123456`. Override or disable this with `DEFAULT_USER_LOGIN`,
+`DEFAULT_USER_PASSWORD`, and `SEED_DEFAULT_USER=false` before using a shared
+environment.
+
 ## Local Development
 
 Run Qdrant and Docker Model Runner, then run the backend from the repo root:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
 $env:QDRANT_URL = "http://localhost:6334"
 $env:OLLAMA_BASE_URL = "http://localhost:12434"
 uvicorn app.main:app --reload --app-dir backend
@@ -141,11 +151,20 @@ npm run build
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /health` | Checks Qdrant, Docker Model Runner, model availability, and collection size. |
+| `GET /health` | Checks Qdrant, Postgres, Redis, Docker Model Runner, model availability, and collection size. |
 | `GET /metadata` | Returns cached departments, versions, and policy names. |
 | `POST /search` | Retrieves relevant policy chunks with optional filters. |
-| `POST /chat` | Returns one complete JSON answer with sources and warnings. |
-| `POST /chat/stream` | Streams NDJSON events: `sources`, `token`, `warning`, `metrics`, `done`, or `error`. |
+| `POST /auth/register` | Creates a user and sets a refresh-token cookie. |
+| `POST /auth/login` | Authenticates a user and sets a refresh-token cookie. |
+| `POST /auth/refresh` | Rotates the refresh token and returns a new access token. |
+| `POST /auth/logout` | Revokes the current refresh token. |
+| `GET /auth/me` | Returns the authenticated user. |
+| `GET /chat/sessions` | Lists the authenticated user's chat sessions. |
+| `POST /chat/session` | Creates a chat session. |
+| `GET /chat/session/{id}/messages` | Returns persisted conversation turns. |
+| `POST /chat` | Protected compatibility endpoint returning one complete JSON answer. |
+| `POST /chat/message` | Protected canonical non-streaming chat endpoint. |
+| `POST /chat/stream` | Protected NDJSON stream: `session`, `sources`, `token`, `warning`, `metrics`, `done`, or `error`. |
 
 Example streaming request:
 
@@ -158,6 +177,7 @@ $body = @{
 Invoke-WebRequest `
   -Uri http://localhost:8000/chat/stream `
   -Method POST `
+  -Headers @{ Authorization = "Bearer <access-token>" } `
   -ContentType "application/json" `
   -Body $body
 ```
@@ -173,6 +193,11 @@ sets container-specific values in `docker-compose.yml`.
 | `QDRANT_URL` | `http://localhost:6333` | `http://qdrant:6333` | Use `http://localhost:6334` for host scripts against Compose Qdrant. |
 | `QDRANT_HOST_PORT` | Compose-only `6334` | optional | Host port mapped to container Qdrant `6333`. |
 | `QDRANT_COLLECTION` | `company_policies_structural` | same | Vector collection name. |
+| `QDRANT_MEMORY_COLLECTION` | `user_memories` | same | User long-term memory vector collection. |
+| `DATABASE_URL` | local Postgres URL | `postgres` service URL | Async SQLAlchemy connection string. |
+| `REDIS_URL` | local Redis URL | `redis` service URL | Short-term memory and worker queue. |
+| `JWT_ACCESS_SECRET` | dev placeholder | env/default | Use a strong secret in any shared environment. |
+| `JWT_REFRESH_SECRET` | dev placeholder | env/default | Use a separate strong secret in any shared environment. |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | same | Sentence Transformers model. |
 | `OLLAMA_BASE_URL` | `http://localhost:12434` | set by Compose model binding | Docker Model Runner/Ollama-compatible API base. |
 | `OLLAMA_MODEL` | `ai/gemma3-qat` | set by Compose model binding | LLM model name. |
