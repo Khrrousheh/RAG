@@ -1,39 +1,148 @@
 name: "RAG model based Gemma3"
 
+x-backend-build: &backend-build
+  context: .
+  dockerfile: backend/Dockerfile
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://rag:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/rag
+  REDIS_URL: redis://redis:6379/0
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_COLLECTION: company_policies_structural
+  QDRANT_MEMORY_COLLECTION: user_memories
+  EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+  API_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-change-me-access-secret}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-change-me-refresh-secret}
+  ACCESS_TOKEN_TTL_MINUTES: "15"
+  REFRESH_TOKEN_TTL_DAYS: "30"
+  REFRESH_COOKIE_SECURE: "false"
+  REFRESH_COOKIE_SAMESITE: lax
+  SHORT_TERM_MEMORY_TURNS: "16"
+  SHORT_TERM_MEMORY_TTL_SECONDS: "604800"
+  LONG_TERM_MEMORY_TOP_K: "5"
+  MEMORY_SUMMARY_TURN_THRESHOLD: "8"
+  MEMORY_SUMMARY_CHAR_THRESHOLD: "12000"
+  MEMORY_JOB_QUEUE: memory_jobs
+  HF_HUB_DISABLE_XET: "1"
+  WARM_EMBEDDINGS_ON_STARTUP: "false"
+  WARM_LLM_ON_STARTUP: "false"
+  WARM_METADATA_ON_STARTUP: "true"
+  EMBEDDING_CACHE_SIZE: "256"
+  OLLAMA_KEEP_ALIVE: 30m
+  OLLAMA_NUM_PREDICT: "384"
+  PROMPT_CONTEXT_MAX_CHARS: "3600"
+  PROMPT_MIN_SOURCES: "3"
+  PROMPT_MAX_SOURCES: "5"
+  HTTP_MAX_CONNECTIONS: "20"
+  HTTP_MAX_KEEPALIVE_CONNECTIONS: "10"
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   qdrant:
     image: qdrant/qdrant:v1.17.1
-    ports: ["${QDRANT_HOST_PORT:-6334}:6333"]
-    volumes: [./qdrant_data:/qdrant/storage]
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HOST_PORT:-6334}:6333"
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build: *backend-build
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    environment:
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: company_policies_structural
-      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
-      API_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      HF_HUB_DISABLE_XET: "1"
-      WARM_EMBEDDINGS_ON_STARTUP: "false"
-      WARM_LLM_ON_STARTUP: "false"
-      WARM_METADATA_ON_STARTUP: "true"
-      EMBEDDING_CACHE_SIZE: "256"
-      OLLAMA_KEEP_ALIVE: 30m
-      OLLAMA_NUM_PREDICT: "384"
-      PROMPT_CONTEXT_MAX_CHARS: "3600"
-      PROMPT_MIN_SOURCES: "3"
-      PROMPT_MAX_SOURCES: "5"
-      HTTP_MAX_CONNECTIONS: "20"
-      HTTP_MAX_KEEPALIVE_CONNECTIONS: "10"
+    build: *backend-build
+    restart: unless-stopped
+    environment: *backend-env
     models:
       llm:
         endpoint_var: OLLAMA_BASE_URL
         model_var: OLLAMA_MODEL
-    ports: ["8000:8000"]
+    ports:
+      - "8000:8000"
     depends_on:
-      - qdrant
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()",
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  memory-worker:
+    build: *backend-build
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment: *backend-env
+    models:
+      llm:
+        endpoint_var: OLLAMA_BASE_URL
+        model_var: OLLAMA_MODEL
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - hf_cache:/root/.cache/huggingface
 
@@ -41,14 +150,24 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    restart: unless-stopped
     environment:
       VITE_PROXY_TARGET: http://backend:8000
-    ports: ["5173:5173"]
+    ports:
+      - "5173:5173"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5173 >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
 
 volumes:
   hf_cache:
+  postgres_data:
+  redis_data:
 
 models:
   llm:

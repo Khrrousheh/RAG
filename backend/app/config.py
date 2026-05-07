@@ -26,6 +26,27 @@ class Settings(BaseSettings):
     prompt_max_sources: int = 5
     http_max_connections: int = 20
     http_max_keepalive_connections: int = 10
+    database_url: str = "postgresql+asyncpg://rag:rag_password@localhost:5432/rag"
+    redis_url: str = "redis://localhost:6379/0"
+    jwt_access_secret: str = "change-me-access-secret"
+    jwt_refresh_secret: str = "change-me-refresh-secret"
+    jwt_algorithm: str = "HS256"
+    access_token_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 30
+    refresh_cookie_name: str = "rag_refresh_token"
+    refresh_cookie_secure: bool = False
+    refresh_cookie_samesite: str = "lax"
+    auth_login_rate_limit: int = 12
+    auth_login_rate_window_seconds: int = 300
+    short_term_memory_turns: int = 16
+    short_term_memory_ttl_seconds: int = 604800
+    long_term_memory_top_k: int = 5
+    qdrant_memory_collection: str = "user_memories"
+    memory_summary_turn_threshold: int = 8
+    memory_summary_char_threshold: int = 12000
+    memory_job_queue: str = "memory_jobs"
+    memory_worker_poll_timeout_seconds: int = 5
+    memory_worker_max_attempts: int = 3
 
     model_config = SettingsConfigDict(
         env_file=".env",

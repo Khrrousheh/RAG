@@ -4,13 +4,14 @@ from contextlib import asynccontextmanager
 import anyio
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 
-from .config import Settings, get_settings
+from .api_auth import router as auth_router
+from .api_chat import router as chat_router
+from .config import get_settings
+from .db import check_db, dispose_db
 from .rag import RagService, get_rag_service
+from .redis_client import check_redis, close_redis
 from .schemas import (
-    ChatRequest,
-    ChatResponse,
     HealthResponse,
     MetadataResponse,
     SearchRequest,
@@ -40,6 +41,8 @@ def create_app() -> FastAPI:
             yield
         finally:
             await service.shutdown()
+            await close_redis()
+            await dispose_db()
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
@@ -51,9 +54,28 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.include_router(auth_router)
+    app.include_router(chat_router)
+
     @app.get("/health", response_model=HealthResponse)
     async def health(service: RagService = Depends(get_rag_service)) -> HealthResponse:
-        return HealthResponse(**await service.health_async())
+        health_data = await service.health_async()
+        postgres_status = await check_db()
+        redis_status = await check_redis()
+        warnings = list(health_data.get("warnings") or [])
+        if postgres_status != "ok":
+            warnings.append("Postgres check failed.")
+        if redis_status != "ok":
+            warnings.append("Redis check failed.")
+        if postgres_status != "ok" or redis_status != "ok":
+            health_data["status"] = "degraded"
+        health_data.pop("warnings", None)
+        return HealthResponse(
+            **health_data,
+            postgres=postgres_status,
+            redis=redis_status,
+            warnings=warnings,
+        )
 
     @app.get("/metadata", response_model=MetadataResponse)
     async def metadata(service: RagService = Depends(get_rag_service)) -> MetadataResponse:
@@ -65,29 +87,6 @@ def create_app() -> FastAPI:
         service: RagService = Depends(get_rag_service),
     ) -> dict[str, object]:
         return {"sources": await service.search_async(request)}
-
-    @app.post("/chat", response_model=ChatResponse)
-    async def chat(
-        request: ChatRequest,
-        service: RagService = Depends(get_rag_service),
-        settings: Settings = Depends(get_settings),
-    ) -> ChatResponse:
-        request.top_k = min(request.top_k, settings.max_top_k)
-        answer, sources, warnings = await service.chat_async(request)
-        return ChatResponse(answer=answer, sources=sources, warnings=warnings)
-
-    @app.post("/chat/stream")
-    async def chat_stream(
-        request: ChatRequest,
-        service: RagService = Depends(get_rag_service),
-        settings: Settings = Depends(get_settings),
-    ) -> StreamingResponse:
-        request.top_k = min(request.top_k, settings.max_top_k)
-        return StreamingResponse(
-            service.stream_chat(request),
-            media_type="application/x-ndjson",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
 
     return app
 

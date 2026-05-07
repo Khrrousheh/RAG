@@ -28,6 +28,7 @@ make uncertainty clear.
 
 | Field | Contract |
 | --- | --- |
+| `session_id` | Optional authenticated chat session. If omitted, the backend creates or reuses an active session. |
 | `message` | Required user question, 1 to 4000 chars. |
 | `policy` | Optional policy name or alias filter. |
 | `department` | Optional exact department filter. |
@@ -139,6 +140,22 @@ but it must still cite available policy-like sources when they are retrieved.
 
 Each line is one JSON object with an `event` field.
 
+### `session`
+
+Emitted before sources when authenticated chat creates or selects a persisted
+session.
+
+```json
+{
+  "event": "session",
+  "session": {
+    "id": "...",
+    "title": "...",
+    "status": "active"
+  }
+}
+```
+
 ### `sources`
 
 Emitted after retrieval and before model tokens.
@@ -230,8 +247,13 @@ backends may not populate every metric.
 
 - Treat policy PDFs, Qdrant payloads, retrieved chunks, and generated answers as
   private local company data.
+- Treat user accounts, refresh tokens, chat turns, Redis short-term memory, and
+  Qdrant `user_memories` as private user data.
 - Do not log full prompts, full policy text, secrets, credentials, tokens, or
   private user data unless explicitly sanitized.
+- Protected chat and session APIs must enforce `user_id` isolation. Long-term
+  memory retrieval must filter by `user_id` and future `tenant_id` before
+  ranking or prompt inclusion.
 - Do not commit `policies/`, `qdrant_data/`, `.env`, model files, or private
   benchmark outputs.
 - For public-sharing questions, default to sanitized, high-level guidance and
