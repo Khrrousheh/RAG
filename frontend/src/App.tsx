@@ -22,6 +22,7 @@ type ChatMessage = {
   content: string;
   sources?: Source[];
   warnings?: string[];
+  isStreaming?: boolean;
 };
 
 type ChatResponse = {
@@ -29,6 +30,14 @@ type ChatResponse = {
   sources: Source[];
   warnings: string[];
 };
+
+type ChatStreamEvent =
+  | { event: "sources"; sources: Source[]; warnings?: string[] }
+  | { event: "token"; content: string }
+  | { event: "warning"; message: string }
+  | { event: "metrics"; metrics: Record<string, unknown> }
+  | { event: "done" }
+  | { event: "error"; message: string };
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const DEFAULT_TOP_K = 6;
@@ -82,6 +91,126 @@ function App() {
     loadStatus();
   }, []);
 
+  function updateAssistantMessage(
+    messageId: string,
+    update: (message: ChatMessage) => ChatMessage,
+  ) {
+    setMessages((current) =>
+      current.map((message) => (message.id === messageId ? update(message) : message)),
+    );
+  }
+
+  async function requestChatFallback(question: string, assistantId: string) {
+    const response = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: question,
+        top_k: DEFAULT_TOP_K,
+        history: recentHistory,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed with ${response.status}`);
+    }
+
+    const data = (await response.json()) as ChatResponse;
+    updateAssistantMessage(assistantId, (message) => ({
+      ...message,
+      content: data.answer,
+      sources: data.sources,
+      warnings: data.warnings,
+      isStreaming: false,
+    }));
+  }
+
+  async function streamAssistantResponse(
+    question: string,
+    assistantId: string,
+    markTokenReceived: () => void,
+  ) {
+    const response = await fetch(`${API_BASE}/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: question,
+        top_k: DEFAULT_TOP_K,
+        history: recentHistory,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Streaming request failed with ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    function applyStreamEvent(streamEvent: ChatStreamEvent) {
+      if (streamEvent.event === "sources") {
+        updateAssistantMessage(assistantId, (message) => ({
+          ...message,
+          sources: streamEvent.sources,
+          warnings: streamEvent.warnings ?? message.warnings,
+        }));
+        return;
+      }
+
+      if (streamEvent.event === "token") {
+        markTokenReceived();
+        updateAssistantMessage(assistantId, (message) => ({
+          ...message,
+          content: `${message.content}${streamEvent.content}`,
+        }));
+        return;
+      }
+
+      if (streamEvent.event === "warning") {
+        updateAssistantMessage(assistantId, (message) => ({
+          ...message,
+          warnings: [...(message.warnings ?? []), streamEvent.message],
+        }));
+        return;
+      }
+
+      if (streamEvent.event === "done") {
+        updateAssistantMessage(assistantId, (message) => ({
+          ...message,
+          isStreaming: false,
+        }));
+        return;
+      }
+
+      if (streamEvent.event === "error") {
+        throw new Error(streamEvent.message);
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+        applyStreamEvent(JSON.parse(line) as ChatStreamEvent);
+      }
+
+      if (done) {
+        break;
+      }
+    }
+
+    if (buffer.trim()) {
+      applyStreamEvent(JSON.parse(buffer) as ChatStreamEvent);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const question = input.trim();
@@ -94,49 +223,51 @@ function App() {
       role: "user",
       content: question,
     };
-    setMessages((current) => [...current, userMessage]);
+    const assistantId = crypto.randomUUID();
+    const assistantMessage: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+    };
+    setMessages((current) => [...current, userMessage, assistantMessage]);
     setInput("");
     setIsLoading(true);
 
+    let receivedToken = false;
     try {
-      const response = await fetch(`${API_BASE}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: question,
-          top_k: DEFAULT_TOP_K,
-          history: recentHistory,
-        }),
+      await streamAssistantResponse(question, assistantId, () => {
+        receivedToken = true;
       });
-
-      if (!response.ok) {
-        throw new Error(`Request failed with ${response.status}`);
-      }
-
-      const data = (await response.json()) as ChatResponse;
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.answer,
-          sources: data.sources,
-          warnings: data.warnings,
-        },
-      ]);
     } catch (error) {
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content:
-            error instanceof Error
-              ? `The chat request failed: ${error.message}`
-              : "The chat request failed.",
-        },
-      ]);
+      if (!receivedToken) {
+        try {
+          await requestChatFallback(question, assistantId);
+        } catch (fallbackError) {
+          updateAssistantMessage(assistantId, (message) => ({
+            ...message,
+            content:
+              fallbackError instanceof Error
+                ? `The chat request failed: ${fallbackError.message}`
+                : "The chat request failed.",
+            isStreaming: false,
+          }));
+        }
+      } else {
+        updateAssistantMessage(assistantId, (message) => ({
+          ...message,
+          warnings: [
+            ...(message.warnings ?? []),
+            error instanceof Error ? error.message : "The streamed response stopped unexpectedly.",
+          ],
+          isStreaming: false,
+        }));
+      }
     } finally {
+      updateAssistantMessage(assistantId, (message) => ({
+        ...message,
+        isStreaming: false,
+      }));
       setIsLoading(false);
     }
   }
@@ -162,16 +293,23 @@ function App() {
                 {message.role === "assistant" ? <Bot size={18} /> : <User size={18} />}
               </div>
               <div className="message-body">
-                <div className="bubble">
-                  {message.content.split("\n").map((line, index) => (
-                    <p key={`${message.id}-${index}`}>{line || "\u00a0"}</p>
-                  ))}
+                <div className={`bubble ${message.isStreaming && !message.content ? "loading" : ""}`}>
+                  {message.isStreaming && !message.content ? (
+                    <>
+                      <Loader2 size={18} aria-hidden="true" />
+                      <span>Searching policies</span>
+                    </>
+                  ) : (
+                    message.content.split("\n").map((line, index) => (
+                      <p key={`${message.id}-${index}`}>{line || "\u00a0"}</p>
+                    ))
+                  )}
                 </div>
 
                 {message.warnings && message.warnings.length > 0 && (
                   <div className="warnings">
-                    {message.warnings.map((warning) => (
-                      <p key={warning}>{warning}</p>
+                    {message.warnings.map((warning, index) => (
+                      <p key={`${message.id}-warning-${index}`}>{warning}</p>
                     ))}
                   </div>
                 )}
@@ -214,20 +352,6 @@ function App() {
               </div>
             </article>
           ))}
-
-          {isLoading && (
-            <article className="message assistant">
-              <div className="avatar" aria-hidden="true">
-                <Bot size={18} />
-              </div>
-              <div className="message-body">
-                <div className="bubble loading">
-                  <Loader2 size={18} aria-hidden="true" />
-                  <span>Searching policies</span>
-                </div>
-              </div>
-            </article>
-          )}
 
           <div ref={messagesEndRef} />
         </div>
