@@ -173,10 +173,13 @@ QDRANT_HOST_PORT=6334
 QDRANT_COLLECTION=company_policies_structural
 QDRANT_MEMORY_COLLECTION=user_memories
 OLLAMA_MODEL=ai/gemma3-qat
+WARM_METADATA_ON_STARTUP=false
 
 SEED_DEFAULT_USER=false
 REFRESH_COOKIE_SECURE=false
 ```
+
+`WARM_METADATA_ON_STARTUP=false` lets the backend start before the first policy ingestion creates the Qdrant collection. The ingestion script restarts the backend after loading PDFs so metadata caches refresh.
 
 For a trusted LAN deployment, users should register through the UI. To seed a default account, set `SEED_DEFAULT_USER=true` and replace `DEFAULT_USER_LOGIN` and `DEFAULT_USER_PASSWORD` with a strong password before deployment.
 
@@ -476,6 +479,19 @@ Copy PDFs into `policies/`, then run:
 
 ```bash
 bash scripts/ingest.sh --recreate
+```
+
+If `backend-1` is unhealthy before first ingestion, confirm the Ubuntu overlay is active and metadata warmup is disabled:
+
+```bash
+bash scripts/compose.sh config | sed -n '/^  backend:/,/^  [a-z-]*:/p' | grep WARM_METADATA_ON_STARTUP
+bash scripts/logs.sh backend
+```
+
+The Ubuntu deployment should show `WARM_METADATA_ON_STARTUP: "false"`. Redeploy after pulling this guide and script update:
+
+```bash
+bash scripts/compose.sh up -d --build backend memory-worker frontend
 ```
 
 ### Ingestion skips PDFs
