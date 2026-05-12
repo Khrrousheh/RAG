@@ -22,9 +22,9 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=${REPO_ROOT}
 RemainAfterExit=yes
-ExecStartPre=-/usr/bin/docker model start-runner
-ExecStart=${SCRIPT_DIR}/compose.sh up -d
-ExecStop=${SCRIPT_DIR}/compose.sh down
+ExecStartPre=-/usr/bin/env docker model start-runner
+ExecStart=/usr/bin/env bash ${SCRIPT_DIR}/compose.sh up -d
+ExecStop=/usr/bin/env bash ${SCRIPT_DIR}/compose.sh down
 TimeoutStartSec=0
 
 [Install]

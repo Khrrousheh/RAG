@@ -16,7 +16,7 @@ log() {
 
 ensure_env() {
   if [[ ! -f "${REPO_ROOT}/.env" ]]; then
-    "${SCRIPT_DIR}/bootstrap-env.sh"
+    bash "${SCRIPT_DIR}/bootstrap-env.sh"
   fi
   # shellcheck disable=SC1091
   set -a
@@ -74,15 +74,15 @@ main() {
   ensure_model_runner
 
   log "Building application images"
-  "${SCRIPT_DIR}/compose.sh" build
+  bash "${SCRIPT_DIR}/compose.sh" build
 
   log "Starting services"
-  "${SCRIPT_DIR}/compose.sh" up -d --wait postgres redis qdrant
-  "${SCRIPT_DIR}/compose.sh" up migrate
-  "${SCRIPT_DIR}/compose.sh" up -d --wait backend memory-worker frontend
+  bash "${SCRIPT_DIR}/compose.sh" up -d --wait postgres redis qdrant
+  bash "${SCRIPT_DIR}/compose.sh" up migrate
+  bash "${SCRIPT_DIR}/compose.sh" up -d --wait backend memory-worker frontend
 
   log "Waiting for containers to report healthy"
-  "${SCRIPT_DIR}/compose.sh" ps
+  bash "${SCRIPT_DIR}/compose.sh" ps
 
   local host_ip
   host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -97,10 +97,10 @@ Open the app:
   http://${host_ip}:${FRONTEND_HOST_PORT:-8080}
 
 Verify:
-  ./scripts/verify.sh
+  bash scripts/verify.sh
 
 Ingest policies after copying PDFs into policies/:
-  ./scripts/ingest.sh --recreate
+  bash scripts/ingest.sh --recreate
 EOF
 }
 

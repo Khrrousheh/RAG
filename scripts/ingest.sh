@@ -30,7 +30,7 @@ main() {
     PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${PROJECT_NAME}}"
   fi
 
-  "${SCRIPT_DIR}/compose.sh" up -d --wait qdrant
+  bash "${SCRIPT_DIR}/compose.sh" up -d --wait qdrant
 
   echo "Building ingestion image ${IMAGE_NAME}"
   docker build -f scripts/Dockerfile.ingest -t "${IMAGE_NAME}" .
@@ -46,10 +46,10 @@ main() {
     --collection "${COLLECTION}" \
     "$@"
 
-  mapfile -t running_services < <("${SCRIPT_DIR}/compose.sh" ps --services --status running | grep -E '^(backend|memory-worker)$' || true)
+  mapfile -t running_services < <(bash "${SCRIPT_DIR}/compose.sh" ps --services --status running | grep -E '^(backend|memory-worker)$' || true)
   if (( ${#running_services[@]} > 0 )); then
     echo "Restarting running app services so metadata caches refresh"
-    "${SCRIPT_DIR}/compose.sh" restart "${running_services[@]}"
+    bash "${SCRIPT_DIR}/compose.sh" restart "${running_services[@]}"
   fi
 }
 

@@ -95,11 +95,11 @@ main() {
     echo "Docker installed. Log out and back in, then run scripts/install.sh again to verify non-root access."
   fi
 
-  "${SCRIPT_DIR}/bootstrap-env.sh"
+  bash "${SCRIPT_DIR}/bootstrap-env.sh"
   mkdir -p "${REPO_ROOT}/policies" "${REPO_ROOT}/qdrant_data"
 
   if [[ "${1:-}" == "--systemd" ]]; then
-    "${SCRIPT_DIR}/install-systemd-service.sh"
+    bash "${SCRIPT_DIR}/install-systemd-service.sh"
   fi
 
   log "Install step complete"

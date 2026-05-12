@@ -7,5 +7,5 @@ if [[ "$#" -eq 0 ]]; then
   set -- --tail=200 -f
 fi
 
-exec "${SCRIPT_DIR}/compose.sh" logs "$@"
+exec bash "${SCRIPT_DIR}/compose.sh" logs "$@"
 

@@ -199,10 +199,10 @@ The deployment script:
 Use the Compose wrapper for all manual operations:
 
 ```bash
-./scripts/compose.sh ps
-./scripts/compose.sh config
-./scripts/compose.sh restart backend frontend
-./scripts/compose.sh down
+bash scripts/compose.sh ps
+bash scripts/compose.sh config
+bash scripts/compose.sh restart backend frontend
+bash scripts/compose.sh down
 ```
 
 The production frontend image uses `frontend/Dockerfile.prod`, builds the Vite app with `VITE_API_URL=/api`, and serves static files through `frontend/nginx.conf`.
@@ -221,7 +221,7 @@ PostgreSQL stores:
 Alembic migrations are run by the existing `migrate` Compose service:
 
 ```bash
-./scripts/compose.sh up migrate
+bash scripts/compose.sh up migrate
 ```
 
 The main deployment flow also starts `migrate` before the backend and memory worker. The current migration creates the memory/auth/chat schema in Postgres.
@@ -290,13 +290,13 @@ sudo systemctl status policy-rag
 The unit runs:
 
 ```bash
-./scripts/compose.sh up -d
+bash scripts/compose.sh up -d
 ```
 
 and stops with:
 
 ```bash
-./scripts/compose.sh down
+bash scripts/compose.sh down
 ```
 
 ## Optional SSL Setup
@@ -339,7 +339,7 @@ sudo certbot --nginx -d rag.example.com
 Restart after changing `.env`:
 
 ```bash
-./scripts/compose.sh up -d
+bash scripts/compose.sh up -d
 ```
 
 ## Verification And Testing
@@ -348,7 +348,7 @@ Run static checks:
 
 ```bash
 bash -n scripts/*.sh
-./scripts/compose.sh config
+bash scripts/compose.sh config
 ```
 
 Run deployment verification:
@@ -366,7 +366,7 @@ curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS http://127.0.0.1:8080/api/health | jq .
 curl -fsS http://127.0.0.1:6334/collections | jq .
 docker model status
-./scripts/compose.sh ps
+bash scripts/compose.sh ps
 ```
 
 After ingesting PDFs, verify the policy collection:
@@ -411,7 +411,7 @@ docker model logs
 Stop services:
 
 ```bash
-./scripts/compose.sh down
+bash scripts/compose.sh down
 ```
 
 Back up important runtime data:
@@ -499,7 +499,7 @@ REFRESH_COOKIE_SECURE=true
 Then redeploy:
 
 ```bash
-./scripts/compose.sh up -d
+bash scripts/compose.sh up -d
 ```
 
 ## Security Recommendations

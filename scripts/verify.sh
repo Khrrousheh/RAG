@@ -45,9 +45,9 @@ warn_check() {
 }
 
 check "Docker daemon" docker version
-check "Docker Compose config" "${SCRIPT_DIR}/compose.sh" config
+check "Docker Compose config" bash "${SCRIPT_DIR}/compose.sh" config
 check "Docker Model Runner status" docker model status
-check "Compose services" "${SCRIPT_DIR}/compose.sh" ps
+check "Compose services" bash "${SCRIPT_DIR}/compose.sh" ps
 check "Frontend health" curl -fsS "${FRONTEND_URL}/healthz"
 check "Backend health" curl -fsS "${BACKEND_URL}/health"
 check "Frontend API proxy" curl -fsS "${FRONTEND_URL}/api/health"
@@ -61,15 +61,15 @@ if (( failures > 0 )); then
 Verification failed.
 
 Useful next commands:
-  ./scripts/logs.sh
-  ./scripts/compose.sh ps
+  bash scripts/logs.sh
+  bash scripts/compose.sh ps
   docker model logs
   curl -fsS ${BACKEND_URL}/health | jq .
 
 Common fixes:
-  - Run ./scripts/deploy.sh if services are not started.
+  - Run bash scripts/deploy.sh if services are not started.
   - Run docker model pull ${OLLAMA_MODEL:-ai/gemma3-qat} if the model is missing.
-  - Copy PDFs into policies/ and run ./scripts/ingest.sh --recreate if the Qdrant collection is missing or empty.
+  - Copy PDFs into policies/ and run bash scripts/ingest.sh --recreate if the Qdrant collection is missing or empty.
 EOF
   exit 1
 fi
@@ -77,7 +77,7 @@ fi
 echo
 if (( warnings > 0 )); then
   echo "Core deployment checks passed with ${warnings} warning(s)."
-  echo "If policies are not ingested yet, copy PDFs into policies/ and run: ./scripts/ingest.sh --recreate"
+  echo "If policies are not ingested yet, copy PDFs into policies/ and run: bash scripts/ingest.sh --recreate"
 else
   echo "All deployment checks passed."
 fi
