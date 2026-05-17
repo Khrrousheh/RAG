@@ -12,7 +12,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .memory_service import MemoryHit, MemoryService
 from .models import ChatSession, ConversationTurn, User
-from .rag import MODEL_RUNNER_NAME, RagService, _fallback_answer, _source_to_json, _stream_event
+from .rag import (
+    MODEL_RUNNER_NAME,
+    RagService,
+    _append_unique_warning,
+    _fallback_answer,
+    _llm_unavailable_warning,
+    _policy_note,
+    _source_to_json,
+    _stream_event,
+)
 from .schemas import ChatRequest, ChatResponse, ChatTurn, MemoryUsageResponse, SearchRequest, Source
 from .session_service import SessionService
 
@@ -96,9 +105,9 @@ class ChatService:
             search_request,
         )
         sources = search_result.sources
-        warnings: list[str] = []
+        warnings: list[str] = [_policy_note(sources)]
         if search_result.resolved_policy:
-            warnings.append(f"Filtered retrieval to {search_result.resolved_policy[0]}.")
+            _append_unique_warning(warnings, f"Filtered retrieval to {search_result.resolved_policy[0]}.")
 
         memory_start = monotonic_time.perf_counter()
         long_memories: list[MemoryHit] = []
@@ -210,18 +219,16 @@ class ChatService:
         except Exception as exc:
             fallback = True
             LOGGER.warning("%s generation failed: %s", MODEL_RUNNER_NAME, exc)
-            warning = (
-                f"{MODEL_RUNNER_NAME} could not generate an answer. "
-                "Showing retrieved context instead."
-            )
-            prepared.warnings.append(warning)
-            answer = _fallback_answer(request.message, prepared.sources)
+            warning = _llm_unavailable_warning(exc)
+            _append_unique_warning(prepared.warnings, warning)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
             metrics = self._chat_metrics(
                 prepared=prepared,
                 answer_chars=len(answer),
                 total_ms=(monotonic_time.perf_counter() - request_start) * 1000,
                 stream=False,
                 fallback=fallback,
+                llm_unavailable=True,
             )
 
         summary_enqueued = await self._persist_assistant_and_memory(
@@ -254,8 +261,6 @@ class ChatService:
             sources=[_source_to_json(source) for source in prepared.sources],
             warnings=prepared.warnings,
         )
-        for warning in prepared.warnings:
-            yield _stream_event("warning", message=warning)
 
         if not request.use_llm:
             answer = _fallback_answer(request.message, prepared.sources)
@@ -283,6 +288,7 @@ class ChatService:
         llm_start = monotonic_time.perf_counter()
         first_token_ms: float | None = None
         fallback = False
+        llm_unavailable = False
 
         try:
             async with self.rag_service._ensure_async_client().stream(
@@ -310,25 +316,25 @@ class ChatService:
                     if payload.get("done"):
                         break
         except Exception as exc:
+            llm_unavailable = True
             fallback = True
             LOGGER.warning("%s streaming generation failed: %s", MODEL_RUNNER_NAME, exc)
-            warning = (
-                f"{MODEL_RUNNER_NAME} could not generate an answer. "
-                "Showing retrieved context instead."
-            )
-            prepared.warnings.append(warning)
+            warning = _llm_unavailable_warning(exc)
+            _append_unique_warning(prepared.warnings, warning)
             yield _stream_event("warning", message=warning)
-            if not answer_parts:
-                answer = _fallback_answer(request.message, prepared.sources)
-                answer_parts.append(answer)
-                yield _stream_event("token", content=answer)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
+            if answer_parts:
+                answer = f"\n\n{answer}"
+            answer_parts.append(answer)
+            yield _stream_event("token", content=answer)
 
         if not answer_parts:
             fallback = True
-            warning = f"{MODEL_RUNNER_NAME} returned an empty streamed answer."
-            prepared.warnings.append(warning)
+            llm_unavailable = True
+            warning = _llm_unavailable_warning(RuntimeError(f"{MODEL_RUNNER_NAME} returned an empty streamed answer."))
+            _append_unique_warning(prepared.warnings, warning)
             yield _stream_event("warning", message=warning)
-            answer = _fallback_answer(request.message, prepared.sources)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
             answer_parts.append(answer)
             yield _stream_event("token", content=answer)
 
@@ -341,6 +347,7 @@ class ChatService:
             llm_total_ms=(monotonic_time.perf_counter() - llm_start) * 1000,
             stream=True,
             fallback=fallback,
+            llm_unavailable=llm_unavailable,
         )
         summary_enqueued = await self._persist_assistant_and_memory(
             db,
@@ -374,9 +381,9 @@ class ChatService:
             f"User question:\n{request.message}\n\n"
             "Write a helpful, concise answer. Use user memory only for continuity and personalization; "
             "do not treat memory as policy authority. Policy claims must be grounded in the policy context "
-            "and cite source ids like [1]. Prefer a practical checklist when it helps. Aim for 180-220 words "
-            "unless the question is simpler. Include policy title, department, version, and effective date "
-            "when relevant."
+            "and cite source ids like [1]. Write a direct, concise answer in about 120-170 words unless "
+            "the question is simpler. Use short bullets only when they improve scanning. Include policy "
+            "title, department, version, and effective date when relevant."
         )
         return prompt, len(policy_context) + len(memory_context), prompt_source_count
 
@@ -444,8 +451,9 @@ class ChatService:
         llm_total_ms: float | None = None,
         stream: bool,
         fallback: bool = False,
+        llm_unavailable: bool = False,
     ) -> dict[str, Any]:
-        return {
+        metrics: dict[str, Any] = {
             "retrieval_ms": round(prepared.retrieval_ms, 2),
             "prompt_build_ms": round(prepared.prompt_build_ms, 2),
             "embedding_ms": prepared.retrieval_metrics.get("embedding_ms"),
@@ -467,6 +475,9 @@ class ChatService:
             "stream": stream,
             "fallback": fallback,
         }
+        if llm_unavailable:
+            metrics["llm_unavailable"] = True
+        return metrics
 
     @staticmethod
     def _log_chat_metrics(metrics: dict[str, Any]) -> None:

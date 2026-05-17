@@ -203,7 +203,7 @@ sets container-specific values in `docker-compose.yml`.
 | `OLLAMA_MODEL` | `ai/gemma3-qat` | set by Compose model binding | LLM model name. |
 | `OLLAMA_TIMEOUT_SECONDS` | `240` | default | LLM request timeout. |
 | `OLLAMA_NUM_CTX` | `4096` | default | Model context window. |
-| `OLLAMA_NUM_PREDICT` | `384` | `384` | Output-token budget. |
+| `OLLAMA_NUM_PREDICT` | `256` | `256` | Output-token budget. |
 | `OLLAMA_KEEP_ALIVE` | `30m` | `30m` | Keeps model loaded between requests when supported. |
 | `DEFAULT_TOP_K` | `5` | default | Backend default retrieval count. |
 | `MAX_TOP_K` | `10` | default | Hard cap for `top_k`. |
@@ -211,9 +211,9 @@ sets container-specific values in `docker-compose.yml`.
 | `WARM_LLM_ON_STARTUP` | `true` | `false` | Sends a tiny LLM warmup request. Disabled in Compose for faster startup. |
 | `WARM_METADATA_ON_STARTUP` | `true` | `true` | Preloads metadata and policy aliases. |
 | `EMBEDDING_CACHE_SIZE` | `256` | `256` | In-process query embedding LRU cache size. |
-| `PROMPT_CONTEXT_MAX_CHARS` | `3600` | `3600` | Max policy context chars included in prompt. |
+| `PROMPT_CONTEXT_MAX_CHARS` | `2800` | `2800` | Max policy context chars included in prompt. |
 | `PROMPT_MIN_SOURCES` | `3` | `3` | Minimum prompt source count when available. |
-| `PROMPT_MAX_SOURCES` | `5` | `5` | Maximum prompt source count. |
+| `PROMPT_MAX_SOURCES` | `4` | `4` | Maximum prompt source count. |
 | `HTTP_MAX_CONNECTIONS` | `20` | `20` | Async HTTP client pool limit. |
 | `HTTP_MAX_KEEPALIVE_CONNECTIONS` | `10` | `10` | Async keep-alive pool limit. |
 | `VITE_PROXY_TARGET` | `http://backend:8000` | same | Vite `/api` proxy target. |

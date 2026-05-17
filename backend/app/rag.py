@@ -270,9 +270,58 @@ def _format_source_for_prompt(source: Source, text: str | None = None) -> str:
     return f"[{source.id}] {title}, {page}. {metadata}\n{text if text is not None else source.text}"
 
 
-def _fallback_answer(message: str, sources: list[Source]) -> str:
+def _append_unique_warning(warnings: list[str], warning: str | None) -> None:
+    if warning and warning not in warnings:
+        warnings.append(warning)
+
+
+def _policy_note(sources: list[Source]) -> str:
     if not sources:
-        return (
+        return "Policy note: No matching policy passages were retrieved."
+
+    labels: list[str] = []
+    seen: set[tuple[str, int]] = set()
+    for source in sources:
+        title = source.policy_name or source.policy_title or source.file_name or "Unknown policy"
+        key = (title, source.id)
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(f"{title} [{source.id}]")
+        if len(labels) >= 4:
+            break
+
+    remaining = len(sources) - len(labels)
+    suffix = f" and {remaining} more source(s)" if remaining > 0 else ""
+    return f"Policy note: Retrieved policy context from {', '.join(labels)}{suffix}."
+
+
+def _llm_unavailable_warning(exc: BaseException | None = None) -> str:
+    reason = "generation failed"
+    if isinstance(exc, httpx.TimeoutException):
+        reason = "request timed out"
+    elif isinstance(exc, httpx.HTTPStatusError):
+        reason = f"service returned HTTP {exc.response.status_code}"
+    elif isinstance(exc, httpx.ConnectError):
+        reason = "connection failed"
+    elif isinstance(exc, httpx.RequestError):
+        reason = "request failed"
+    elif exc is not None and "empty" in str(exc).lower():
+        reason = "empty response"
+
+    return f"LLM unavailable: {reason}. Showing retrieved policy context instead."
+
+
+def _fallback_answer(
+    message: str,
+    sources: list[Source],
+    *,
+    llm_warning: str | None = None,
+) -> str:
+    prefix = f"{llm_warning}\n\n" if llm_warning else ""
+
+    if not sources:
+        return prefix + (
             "I could not find matching policy passages for that question. "
             "Try removing filters or asking with a more specific policy term."
         )
@@ -282,7 +331,7 @@ def _fallback_answer(message: str, sources: list[Source]) -> str:
         data_ref = _source_ref(sources, "Data Protection")
         media_ref = _source_ref(sources, "Media Handling")
         masking_ref = _source_ref(sources, "Data Masking")
-        return (
+        answer = (
             "Short answer: yes, you can share a LinkedIn progress post, but keep it high-level, "
             "sanitized, and non-confidential.\n\n"
             "Safe to include:\n"
@@ -303,12 +352,12 @@ def _fallback_answer(message: str, sources: list[Source]) -> str:
             "The work helped me practice FastAPI, React, Qdrant, and structured PDF extraction while keeping confidential data out of public examples.\"\n\n"
             "Bottom line: share the engineering journey, not the company secrets."
         )
+        return f"{prefix}{answer}"
 
-    lines = [
-        "I found relevant policy passages, but the LLM response service is unavailable. "
-        "Here are the strongest retrieved references:",
-        "",
-    ]
+    lines: list[str] = []
+    if llm_warning:
+        lines.extend([llm_warning, ""])
+    lines.extend(["Here are the strongest retrieved policy references:", ""])
     for source in sources[:3]:
         title = source.policy_name or source.policy_title or source.file_name or "Unknown policy"
         page = f"p. {source.page}" if source.page else "page unknown"
@@ -714,9 +763,9 @@ class RagService:
         )
         retrieval_ms = (monotonic_time.perf_counter() - retrieval_start) * 1000
         sources = search_result.sources
-        warnings: list[str] = []
+        warnings: list[str] = [_policy_note(sources)]
         if search_result.resolved_policy:
-            warnings.append(f"Filtered retrieval to {search_result.resolved_policy[0]}.")
+            _append_unique_warning(warnings, f"Filtered retrieval to {search_result.resolved_policy[0]}.")
 
         if not request.use_llm:
             return PreparedChat(
@@ -781,17 +830,16 @@ class RagService:
             return answer, prepared.sources, prepared.warnings
         except Exception as exc:
             LOGGER.warning("%s generation failed: %s", MODEL_RUNNER_NAME, exc)
-            prepared.warnings.append(
-                f"{MODEL_RUNNER_NAME} could not generate an answer. "
-                "Showing retrieved context instead."
-            )
-            answer = _fallback_answer(request.message, prepared.sources)
+            warning = _llm_unavailable_warning(exc)
+            _append_unique_warning(prepared.warnings, warning)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
             self._log_chat_metrics(
                 prepared=prepared,
                 answer_chars=len(answer),
                 total_ms=(monotonic_time.perf_counter() - request_start) * 1000,
                 stream=False,
                 fallback=True,
+                llm_unavailable=True,
             )
             return answer, prepared.sources, prepared.warnings
 
@@ -830,17 +878,16 @@ class RagService:
             return answer, prepared.sources, prepared.warnings
         except Exception as exc:
             LOGGER.warning("%s async generation failed: %s", MODEL_RUNNER_NAME, exc)
-            prepared.warnings.append(
-                f"{MODEL_RUNNER_NAME} could not generate an answer. "
-                "Showing retrieved context instead."
-            )
-            answer = _fallback_answer(request.message, prepared.sources)
+            warning = _llm_unavailable_warning(exc)
+            _append_unique_warning(prepared.warnings, warning)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
             self._log_chat_metrics(
                 prepared=prepared,
                 answer_chars=len(answer),
                 total_ms=(monotonic_time.perf_counter() - request_start) * 1000,
                 stream=False,
                 fallback=True,
+                llm_unavailable=True,
             )
             return answer, prepared.sources, prepared.warnings
 
@@ -858,8 +905,6 @@ class RagService:
             sources=[_source_to_json(source) for source in prepared.sources],
             warnings=prepared.warnings,
         )
-        for warning in prepared.warnings:
-            yield _stream_event("warning", message=warning)
 
         if not request.use_llm:
             answer = _fallback_answer(request.message, prepared.sources)
@@ -879,6 +924,7 @@ class RagService:
         llm_start = monotonic_time.perf_counter()
         first_token_ms: float | None = None
         fallback = False
+        llm_unavailable = False
 
         try:
             async with self._ensure_async_client().stream(
@@ -906,25 +952,25 @@ class RagService:
                     if payload.get("done"):
                         break
         except Exception as exc:
+            llm_unavailable = True
+            fallback = True
             LOGGER.warning("%s streaming generation failed: %s", MODEL_RUNNER_NAME, exc)
-            warning = (
-                f"{MODEL_RUNNER_NAME} could not generate an answer. "
-                "Showing retrieved context instead."
-            )
+            warning = _llm_unavailable_warning(exc)
             yield _stream_event("warning", message=warning)
-            prepared.warnings.append(warning)
-            if not answer_parts:
-                fallback = True
-                answer = _fallback_answer(request.message, prepared.sources)
-                answer_parts.append(answer)
-                yield _stream_event("token", content=answer)
+            _append_unique_warning(prepared.warnings, warning)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
+            if answer_parts:
+                answer = f"\n\n{answer}"
+            answer_parts.append(answer)
+            yield _stream_event("token", content=answer)
 
         if not answer_parts:
             fallback = True
-            warning = f"{MODEL_RUNNER_NAME} returned an empty streamed answer."
-            prepared.warnings.append(warning)
+            llm_unavailable = True
+            warning = _llm_unavailable_warning(RuntimeError(f"{MODEL_RUNNER_NAME} returned an empty streamed answer."))
+            _append_unique_warning(prepared.warnings, warning)
             yield _stream_event("warning", message=warning)
-            answer = _fallback_answer(request.message, prepared.sources)
+            answer = _fallback_answer(request.message, prepared.sources, llm_warning=warning)
             answer_parts.append(answer)
             yield _stream_event("token", content=answer)
 
@@ -936,6 +982,7 @@ class RagService:
             llm_total_ms=(monotonic_time.perf_counter() - llm_start) * 1000,
             stream=True,
             fallback=fallback,
+            llm_unavailable=llm_unavailable,
         )
         self._log_chat_metrics_from_dict(metrics)
         yield _stream_event("metrics", metrics=metrics)
@@ -951,8 +998,9 @@ class RagService:
         llm_total_ms: float | None = None,
         stream: bool,
         fallback: bool = False,
+        llm_unavailable: bool = False,
     ) -> dict[str, Any]:
-        return {
+        metrics: dict[str, Any] = {
             "retrieval_ms": round(prepared.retrieval_ms, 2),
             "prompt_build_ms": round(prepared.prompt_build_ms, 2),
             "embedding_ms": prepared.retrieval_metrics.get("embedding_ms"),
@@ -971,6 +1019,9 @@ class RagService:
             "stream": stream,
             "fallback": fallback,
         }
+        if llm_unavailable:
+            metrics["llm_unavailable"] = True
+        return metrics
 
     def _log_chat_metrics(
         self,
@@ -982,6 +1033,7 @@ class RagService:
         llm_total_ms: float | None = None,
         stream: bool,
         fallback: bool = False,
+        llm_unavailable: bool = False,
     ) -> None:
         self._log_chat_metrics_from_dict(
             self._chat_metrics(
@@ -992,6 +1044,7 @@ class RagService:
                 llm_total_ms=llm_total_ms,
                 stream=stream,
                 fallback=fallback,
+                llm_unavailable=llm_unavailable,
             )
         )
 
@@ -1144,8 +1197,8 @@ class RagService:
             f"Conversation so far:\n{history or 'None'}\n\n"
             f"Policy context:\n{context}\n\n"
             f"User question:\n{request.message}\n\n"
-            "Write a helpful, concise answer. Prefer a practical checklist when it helps. "
-            "Aim for 180-220 words unless the question is simpler. Include policy title, department, version, "
+            "Write a direct, concise answer in about 120-170 words unless the question is simpler. "
+            "Use short bullets only when they improve scanning. Include policy title, department, version, "
             "and effective date when relevant. End each policy-based recommendation with a source id."
         )
         return PromptBuild(
