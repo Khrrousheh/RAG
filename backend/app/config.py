@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ollama_model: str = "ai/gemma3-qat"
     ollama_timeout_seconds: float = 240.0
     ollama_num_ctx: int = 4096
-    ollama_num_predict: int = 384
+    ollama_num_predict: int = 256
     ollama_keep_alive: str = "30m"
     default_top_k: int = 5
     max_top_k: int = 10
@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     warm_llm_on_startup: bool = True
     warm_metadata_on_startup: bool = True
     embedding_cache_size: int = 256
-    prompt_context_max_chars: int = 3600
+    prompt_context_max_chars: int = 2800
     prompt_min_sources: int = 3
-    prompt_max_sources: int = 5
+    prompt_max_sources: int = 4
     http_max_connections: int = 20
     http_max_keepalive_connections: int = 10
     database_url: str = "postgresql+asyncpg://rag:rag_password@localhost:5432/rag"
