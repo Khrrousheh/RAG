@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     qdrant_collection: str = "company_policies_structural"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     ollama_base_url: str = "http://localhost:12434"
-    ollama_model: str = "ai/gemma3-qat"
+    ollama_model: str = "hf.co/microsoft/Phi-3-mini-4k-instruct-gguf"
     ollama_timeout_seconds: float = 240.0
     ollama_num_ctx: int = 4096
     ollama_num_predict: int = 256

@@ -68,7 +68,7 @@ Useful next commands:
 
 Common fixes:
   - Run bash scripts/deploy.sh if services are not started.
-  - Run docker model pull ${OLLAMA_MODEL:-ai/gemma3-qat} if the model is missing.
+  - Run docker model pull ${OLLAMA_MODEL:-hf.co/microsoft/Phi-3-mini-4k-instruct-gguf} if the model is missing.
   - Copy PDFs into policies/ and run bash scripts/ingest.sh --recreate if the Qdrant collection is missing or empty.
 EOF
   exit 1

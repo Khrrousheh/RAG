@@ -40,7 +40,7 @@ FastAPI backend
   |
   | Ollama-compatible /api/tags and /api/chat
   v
-Docker Model Runner model: ai/gemma3-qat
+Docker Model Runner model: hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 ```
 
 Host ingestion writes into the same Qdrant storage:
@@ -134,7 +134,7 @@ Redis stores short-term memory in `stm:{user_id}:{session_id}:turns` and the
 ### Docker Model Runner
 
 The backend talks to Docker Model Runner through an Ollama-compatible API. The
-configured model is `ai/gemma3-qat`. Compose uses the `models` section to inject
+configured model is `hf.co/microsoft/Phi-3-mini-4k-instruct-gguf`. Compose uses the `models` section to inject
 the model endpoint and model name into backend environment variables.
 
 ## Ingestion Flow

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-MODEL_NAME="${OLLAMA_MODEL:-ai/gemma3-qat}"
+MODEL_NAME="${OLLAMA_MODEL:-hf.co/microsoft/Phi-3-mini-4k-instruct-gguf}"
 
 die() {
   echo "ERROR: $*" >&2

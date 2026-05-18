@@ -62,7 +62,7 @@ environments, and frontend dependencies are ignored by Git.
 
 Defaults:
 
-- LLM: `ai/gemma3-qat`
+- LLM: `hf.co/microsoft/Phi-3-mini-4k-instruct-gguf`
 - Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
 - Qdrant collection: `company_policies_structural`
 
@@ -78,7 +78,7 @@ docker model status
 Optionally pre-pull the default model:
 
 ```powershell
-docker model pull ai/gemma3-qat
+docker model pull hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 ```
 
 Start the data services:
@@ -200,7 +200,7 @@ sets container-specific values in `docker-compose.yml`.
 | `JWT_REFRESH_SECRET` | dev placeholder | env/default | Use a separate strong secret in any shared environment. |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | same | Sentence Transformers model. |
 | `OLLAMA_BASE_URL` | `http://localhost:12434` | set by Compose model binding | Docker Model Runner/Ollama-compatible API base. |
-| `OLLAMA_MODEL` | `ai/gemma3-qat` | set by Compose model binding | LLM model name. |
+| `OLLAMA_MODEL` | `hf.co/microsoft/Phi-3-mini-4k-instruct-gguf` | set by Compose model binding | LLM model name. |
 | `OLLAMA_TIMEOUT_SECONDS` | `240` | default | LLM request timeout. |
 | `OLLAMA_NUM_CTX` | `4096` | default | Model context window. |
 | `OLLAMA_NUM_PREDICT` | `256` | `256` | Output-token budget. |
@@ -248,7 +248,7 @@ Run the latency benchmark against a running API:
 python benchmarks\p0_latency_benchmark.py `
   --api-base http://localhost:8000 `
   --llm-base http://localhost:12434 `
-  --model ai/gemma3-qat `
+  --model hf.co/microsoft/Phi-3-mini-4k-instruct-gguf `
   --samples 2 `
   --timeout 240
 ```
@@ -279,7 +279,7 @@ unless they have been sanitized for sharing.
 
 ## Troubleshooting
 
-- If `/health` reports `model_missing`, run `docker model pull ai/gemma3-qat`.
+- If `/health` reports `model_missing`, run `docker model pull hf.co/microsoft/Phi-3-mini-4k-instruct-gguf`.
 - If `/health` reports Docker Model Runner errors, run `docker model status`
   and enable it with `docker desktop enable model-runner`.
 - If the host ingestion script cannot reach Qdrant, confirm the host port with

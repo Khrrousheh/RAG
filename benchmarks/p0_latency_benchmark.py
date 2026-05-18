@@ -12,7 +12,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark P0/P1 RAG latency paths.")
     parser.add_argument("--api-base", default="http://localhost:8000")
     parser.add_argument("--llm-base", default="http://localhost:12434")
-    parser.add_argument("--model", default="ai/gemma3-qat")
+    parser.add_argument("--model", default="hf.co/microsoft/Phi-3-mini-4k-instruct-gguf")
     parser.add_argument(
         "--question",
         default="Can I share progress about this project on LinkedIn?",
