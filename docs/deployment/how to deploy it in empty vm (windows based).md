@@ -159,7 +159,7 @@ Recommended Windows test values:
 QDRANT_HOST_PORT=6334
 QDRANT_COLLECTION=company_policies_structural
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-OLLAMA_MODEL=ai/gemma3-qat
+OLLAMA_MODEL=hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 OLLAMA_NUM_PREDICT=256
 OLLAMA_KEEP_ALIVE=30m
 PROMPT_CONTEXT_MAX_CHARS=2800
@@ -286,7 +286,7 @@ Invoke-WebRequest `
 python benchmarks\p0_latency_benchmark.py `
   --api-base http://localhost:8000 `
   --llm-base http://localhost:12434 `
-  --model ai/gemma3-qat `
+  --model hf.co/microsoft/Phi-3-mini-4k-instruct-gguf `
   --samples 2 `
   --timeout 240
 ```
@@ -364,7 +364,7 @@ http://localhost:6334
 Pull or install the model according to the selected LLM runtime:
 
 ```powershell
-docker model pull ai/gemma3-qat
+docker model pull hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 ```
 
 or use the company-approved Ollama/model-runtime command.

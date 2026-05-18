@@ -60,7 +60,7 @@ REFRESH_COOKIE_SECURE=false
 REFRESH_COOKIE_SAMESITE=lax
 
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-OLLAMA_MODEL=ai/gemma3-qat
+OLLAMA_MODEL=hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 OLLAMA_NUM_PREDICT=256
 OLLAMA_KEEP_ALIVE=30m
 WARM_METADATA_ON_STARTUP=false

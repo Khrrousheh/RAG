@@ -1,4 +1,4 @@
-name: "RAG model based Gemma3"
+name: "RAG model based Phi-3 Mini"
 
 x-backend-build: &backend-build
   context: .
@@ -175,5 +175,5 @@ volumes:
 
 models:
   llm:
-    model: ai/gemma3-qat
+    model: hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
     context_size: 4096

@@ -6,6 +6,7 @@ import httpx
 from backend.app.rag import (
     _fallback_answer,
     _llm_unavailable_warning,
+    _model_name_candidates,
     _policy_note,
     _stream_event,
 )
@@ -82,6 +83,15 @@ class RagHelperTests(unittest.TestCase):
             payload["message"],
             "Policy note: Retrieved policy context from Security Policy [1].",
         )
+
+    def test_model_name_candidates_include_hugging_face_variants(self) -> None:
+        candidates = _model_name_candidates("hf.co/microsoft/Phi-3-mini-4k-instruct-gguf")
+
+        self.assertIn("hf.co/microsoft/Phi-3-mini-4k-instruct-gguf", candidates)
+        self.assertIn("microsoft/Phi-3-mini-4k-instruct-gguf", candidates)
+        self.assertIn("Phi-3-mini-4k-instruct-gguf", candidates)
+        self.assertIn("hf.co/microsoft/Phi-3-mini-4k-instruct-gguf:latest", candidates)
+        self.assertNotIn("docker.io/hf.co/microsoft/Phi-3-mini-4k-instruct-gguf", candidates)
 
 
 if __name__ == "__main__":

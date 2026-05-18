@@ -140,7 +140,7 @@ Docker Model Runner is used because the Compose file declares:
 ```yaml
 models:
   llm:
-    model: ai/gemma3-qat
+    model: hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
     context_size: 4096
 ```
 
@@ -172,7 +172,7 @@ QDRANT_HOST_PORT=6334
 
 QDRANT_COLLECTION=company_policies_structural
 QDRANT_MEMORY_COLLECTION=user_memories
-OLLAMA_MODEL=ai/gemma3-qat
+OLLAMA_MODEL=hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 WARM_METADATA_ON_STARTUP=false
 
 SEED_DEFAULT_USER=false
@@ -195,7 +195,7 @@ The deployment script:
 
 1. creates `.env` if missing;
 2. starts or installs Docker Model Runner;
-3. pulls `ai/gemma3-qat`;
+3. pulls `hf.co/microsoft/Phi-3-mini-4k-instruct-gguf`;
 4. builds backend, worker, frontend, and ingestion-ready images as needed;
 5. starts Postgres, Redis, Qdrant, migrations, backend, memory worker, and frontend.
 
@@ -458,7 +458,7 @@ docker model version
 Pull it manually:
 
 ```bash
-docker model pull ai/gemma3-qat
+docker model pull hf.co/microsoft/Phi-3-mini-4k-instruct-gguf
 docker model status
 ```
 

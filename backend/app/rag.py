@@ -73,18 +73,25 @@ def _model_runner_api_base_url(base_url: str) -> str:
 
 
 def _model_name_candidates(model_name: str) -> set[str]:
-    candidates = {model_name}
-    last_segment = model_name.rsplit("/", 1)[-1]
-    candidates.add(last_segment)
-    if ":" in last_segment:
-        candidates.add(model_name.rsplit(":", 1)[0])
-        candidates.add(last_segment.rsplit(":", 1)[0])
-    else:
-        candidates.add(f"{model_name}:latest")
-        candidates.add(f"{last_segment}:latest")
+    candidates: set[str] = set()
+
+    def add_name(name: str) -> None:
+        candidates.add(name)
+        last_segment = name.rsplit("/", 1)[-1]
+        candidates.add(last_segment)
+        if ":" in last_segment:
+            candidates.add(name.rsplit(":", 1)[0])
+            candidates.add(last_segment.rsplit(":", 1)[0])
+        else:
+            candidates.add(f"{name}:latest")
+            candidates.add(f"{last_segment}:latest")
+
+    add_name(model_name)
+    if model_name.startswith("hf.co/"):
+        add_name(model_name.removeprefix("hf.co/"))
 
     for candidate in list(candidates):
-        if "/" in candidate and not candidate.startswith("docker.io/"):
+        if "/" in candidate and not candidate.startswith(("docker.io/", "hf.co/", "huggingface.co/")):
             candidates.add(f"docker.io/{candidate}")
 
     return candidates
