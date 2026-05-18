@@ -89,7 +89,7 @@ services:
   migrate:
     build: *backend-build
     restart: "no"
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "alembic", "upgrade", "head"]
     environment: *backend-env
     depends_on:
       postgres:
@@ -115,7 +115,7 @@ services:
       migrate:
         condition: service_completed_successfully
     volumes:
-      - hf_cache:/root/.cache/huggingface
+      - hf_cache:/home/app/.cache/huggingface
     healthcheck:
       test:
         [
@@ -148,7 +148,7 @@ services:
       migrate:
         condition: service_completed_successfully
     volumes:
-      - hf_cache:/root/.cache/huggingface
+      - hf_cache:/home/app/.cache/huggingface
 
   frontend:
     build:
